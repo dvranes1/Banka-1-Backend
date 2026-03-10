@@ -2,7 +2,9 @@ package com.company.observability.starter.service;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Map;
@@ -56,6 +58,21 @@ class JwtAuthenticationUserIdExtractTest {
     void shouldReturnEmptyWhenUnauthenticated() {
         Authentication authentication = mock(Authentication.class);
         when(authentication.isAuthenticated()).thenReturn(false);
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        Optional<String> result = extractor.extractUserId();
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void shouldReturnEmptyForAnonymousAuthenticationToken() {
+        AnonymousAuthenticationToken authentication = new AnonymousAuthenticationToken(
+                "key",
+                "anonymousUser",
+                AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")
+        );
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
 

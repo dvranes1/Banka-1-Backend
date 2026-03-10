@@ -45,11 +45,17 @@ public class HttpRequestLoggingFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         long startTime = System.currentTimeMillis();
+        int status = HttpServletResponse.SC_OK;
         try {
             filterChain.doFilter(request, response);
-        }finally {
+            status = response.getStatus();
+        } catch (ServletException | IOException  | RuntimeException e) {
+            status = response.getStatus() >= 400 ? response.getStatus() : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
+            throw e;
+
+        } finally {
             long durationMs = System.currentTimeMillis() - startTime;
-            RequestLogContext logContext = new RequestLogContext(request.getMethod(), request.getRequestURI(), response.getStatus(), durationMs, maskingService.maskQuery(request.getQueryString()), maskingService.maskAuthorizationHeader(request.getHeader("Authorization")));
+            RequestLogContext logContext = new RequestLogContext(request.getMethod(), request.getRequestURI(), status, durationMs, maskingService.maskQuery(request.getQueryString()), maskingService.maskAuthorizationHeader(request.getHeader("Authorization")));
             requestLoggingService.logRequest(logContext);
         }
     }

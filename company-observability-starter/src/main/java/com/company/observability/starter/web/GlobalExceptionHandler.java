@@ -20,12 +20,13 @@ import java.time.OffsetDateTime;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private final ExceptionLoggingService exceptionLoggingService;
+
     /**
      * Kreira globalni exception handler.
      *
      * @param exceptionLoggingService servis za logovanje neobradjenih izuzetaka
      */
-    private final ExceptionLoggingService exceptionLoggingService;
     public GlobalExceptionHandler(ExceptionLoggingService exceptionLoggingService) {
         this.exceptionLoggingService = exceptionLoggingService;
     }

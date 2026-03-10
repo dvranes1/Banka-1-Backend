@@ -12,6 +12,7 @@ import org.slf4j.MDC;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * Servlet filter zaduzen za obradu correlation ID vrednosti.
@@ -57,17 +58,23 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
      */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        Map<String, String> previousMdcContext = MDC.getCopyOfContextMap();
+
         String headerName = observabilityProperties.getCorrelationHeaderName();
         String incomingCID = request.getHeader(headerName);
         CorrelationContext correlationContext = correlationIdService.resolve(incomingCID);
+
         MDC.put(MDC_KEY, correlationContext.correlationId());
         userIdMdcService.putUserIdIfPresent();
         response.setHeader(headerName, correlationContext.correlationId());
         try {
             filterChain.doFilter(request, response);
-        }finally {
-            userIdMdcService.clear();
-            MDC.remove(MDC_KEY);
+        } finally {
+            if(previousMdcContext == null || previousMdcContext.isEmpty()){
+                MDC.clear();
+            } else {
+                MDC.setContextMap(previousMdcContext);
+            }
         }
     }
 }

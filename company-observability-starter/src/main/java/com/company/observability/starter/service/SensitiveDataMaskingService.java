@@ -33,7 +33,7 @@ public class SensitiveDataMaskingService {
             return "-";
         }
         String masked = query;
-        for(Pattern p : SENSITIVE_QUERY_PATTERNS) {
+        for (Pattern p : SENSITIVE_QUERY_PATTERNS) {
             masked = p.matcher(masked).replaceAll("$1$2***");
         }
 

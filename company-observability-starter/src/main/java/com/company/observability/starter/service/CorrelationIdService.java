@@ -1,6 +1,7 @@
 package com.company.observability.starter.service;
 
 import com.company.observability.starter.domain.CorrelationContext;
+import com.company.observability.starter.domain.CorrelationIdGenerator;
 import com.company.observability.starter.domain.UuidCorrelationIdGenerator;
 import org.springframework.util.StringUtils;
 
@@ -11,15 +12,15 @@ import org.springframework.util.StringUtils;
  * U suprotnom, generise se nova vrednost.
  */
 public class CorrelationIdService {
-    private final UuidCorrelationIdGenerator uuidGenerator;
+    private final CorrelationIdGenerator correlationIdGenerator;
 
     /**
      * Kreira servis za razresavanje correlation ID vrednosti.
      *
-     * @param uuidGenerator generator koji se koristi za kreiranje novog correlation ID-a
+     * @param correlationIdGenerator generator koji se koristi za kreiranje novog correlation ID-a
      */
-    public CorrelationIdService(UuidCorrelationIdGenerator uuidGenerator) {
-        this.uuidGenerator = uuidGenerator;
+    public CorrelationIdService(CorrelationIdGenerator correlationIdGenerator) {
+        this.correlationIdGenerator = correlationIdGenerator;
     }
 
     /**
@@ -29,12 +30,12 @@ public class CorrelationIdService {
      * @return rezultat razresavanja koji sadrzi finalni correlation ID i informaciju
      *         da li je ID generisan ili preuzet iz zahteva
      */
-    public CorrelationContext resolve(String incomingCID){
+    public CorrelationContext resolve(String incomingCID) {
         if(StringUtils.hasText(incomingCID)){
-            return new CorrelationContext(incomingCID.trim(),false);
+            return new CorrelationContext(incomingCID.trim());
         }
-        String generatedCID = uuidGenerator.generate();
-        return new CorrelationContext(generatedCID,true);
+        String generatedCID = correlationIdGenerator.generate();
+        return new CorrelationContext(generatedCID);
     }
 
 
