@@ -1,0 +1,13 @@
+.gradle/
+.gradle-user-home/
+.idea/
+*.iml
+build/
+out/
+target/
+tmp/
+temp/
+*.log
+.env
+.env.*
+!.env.example

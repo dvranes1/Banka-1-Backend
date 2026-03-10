@@ -1,0 +1,15 @@
+.git
+.gradle
+.gradle-user-home
+.idea
+**/.gradle
+**/.gradle-home
+**/.idea
+**/build
+**/out
+**/target
+**/.env
+**/.env.*
+!**/.env.example
+**/*.iml
+**/node_modules
