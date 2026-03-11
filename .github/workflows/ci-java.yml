@@ -200,7 +200,7 @@ jobs:
           echo "✅ OpenAPI spec is valid."
 
   # ── Docker Build Validation ───────────────────────────────────────────────
-  docker-validate:
+    docker-validate:
     name: Docker Validate (${{ matrix.service }})
     needs: [detect-changes, build-and-test, validate-docs]
     if: ${{ needs.detect-changes.outputs.services != '[]' && needs.detect-changes.outputs.services != '' }}
@@ -225,9 +225,9 @@ jobs:
 
       - name: Validate Docker build
         if: steps.check.outputs.exists == 'true'
-        working-directory: ${{ matrix.service }}
-        run: docker build .
-
+        # Build from repo root and point to the Dockerfile inside the service folder
+        run: docker build -f ${{ matrix.service }}/Dockerfile .
+        
   # ── TODO: Docker Build & Push to Registry ────────────────────────────────
   # Configure once a container registry is available.
 
