@@ -89,6 +89,7 @@ public class EmployeeMapper {
             if (dto.getRole().getPower() > role.getPower())
                 throw new BusinessException(ErrorCode.NOT_STRONG_ROLE, "Ne mozes da mu das jacu rolu od svoje");
             zaposlen.setRole(dto.getRole());
+            zaposlenService.setovanjePermisija(zaposlen);
         }
     }
 

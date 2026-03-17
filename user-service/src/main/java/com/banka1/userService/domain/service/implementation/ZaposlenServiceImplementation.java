@@ -30,6 +30,7 @@ public class ZaposlenServiceImplementation implements ZaposlenService {
      */
     @Override
     public void setovanjePermisija(Zaposlen zaposlen) {
+        zaposlen.getPermissionSet().clear();
         for (Role r : Role.values()) {
             if (r.getPower() <= zaposlen.getRole().getPower()) {
                 zaposlen.getPermissionSet().addAll(appProperties.getPermissions().get(r));
