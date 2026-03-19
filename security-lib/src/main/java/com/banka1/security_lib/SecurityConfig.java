@@ -50,6 +50,7 @@ public class SecurityConfig {
         ROLE_ADMIN > ROLE_SUPERVISOR
         ROLE_SUPERVISOR > ROLE_AGENT
         ROLE_AGENT > ROLE_BASIC
+        ROLE_CLIENT_TRADING > ROLE_CLIENT_BASIC
     """);
     }
 

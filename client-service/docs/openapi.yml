@@ -8,67 +8,196 @@ servers:
 security:
 - BearerAuthentication: []
 paths:
-  /customers/{id}:
-    put:
+  /auth/login:
+    post:
       tags:
-      - client-controller
-      summary: Azurira podatke klijenta
-      operationId: updateClient
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
+      - auth-controller
+      summary: Prijava klijenta
+      description: Autentifikuje klijenta i vraca JWT token. Ne zahteva prethodni token.
+      operationId: login
+      security: []
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ClientUpdateRequestDto"
+              $ref: "#/components/schemas/LoginRequestDto"
         required: true
       responses:
         "200":
-          description: Klijent uspesno azuriran
+          description: Uspesna prijava
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ClientResponseDto"
+                $ref: "#/components/schemas/LoginResponseDto"
         "400":
           description: Neispravni podaci u zahtevu
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponseDto"
-        "404":
-          description: Klijent nije pronadjen
+        "401":
+          description: Pogresan email ili lozinka
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponseDto"
-        "409":
-          description: Email adresa je vec u upotrebi
+        "403":
+          description: Nalog nije aktivan
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ErrorResponseDto"
-    delete:
+  /auth/check-activate:
+    get:
       tags:
-      - client-controller
-      summary: Brise klijenta
-      operationId: deleteClient
+      - auth-controller
+      summary: Provera aktivacionog tokena
+      description: Proverava validnost aktivacionog tokena i vraca ID potvrde. Ne zahteva prethodni token.
+      operationId: checkActivate
+      security: []
       parameters:
-      - name: id
-        in: path
+      - name: token
+        in: query
         required: true
         schema:
-          type: integer
-          format: int64
+          type: string
+          minLength: 43
+          maxLength: 43
       responses:
-        "204":
-          description: Klijent uspesno obrisan
+        "200":
+          description: Token je validan
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CheckActivateDto"
+        "400":
+          description: Token je neispravan ili je istekao
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
         "404":
           description: Klijent nije pronadjen
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+  /auth/activate:
+    post:
+      tags:
+      - auth-controller
+      summary: Aktivacija naloga klijenta
+      description: Aktivira nalog klijenta i postavlja inicijalnu lozinku. Ne zahteva prethodni token.
+      operationId: activate
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivateDto"
+        required: true
+      responses:
+        "200":
+          description: Nalog uspesno aktiviran
+          content:
+            '*/*':
+              schema:
+                type: string
+        "400":
+          description: Neispravni podaci ili token je istekao
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+  /auth/reset-password:
+    post:
+      tags:
+      - auth-controller
+      summary: Reset lozinke klijenta
+      description: Menja lozinku vec aktiviranog klijenta. Ne zahteva prethodni token.
+      operationId: resetPassword
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivateDto"
+        required: true
+      responses:
+        "200":
+          description: Lozinka uspesno promenjena
+          content:
+            '*/*':
+              schema:
+                type: string
+        "400":
+          description: Neispravni podaci ili token je istekao
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+        "403":
+          description: Nalog nije aktivan
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+  /auth/forgot-password:
+    post:
+      tags:
+      - auth-controller
+      summary: Zahtev za reset lozinke
+      description: Salje link za reset lozinke na email klijenta. Ne zahteva prethodni token.
+      operationId: forgotPassword
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordDto"
+        required: true
+      responses:
+        "200":
+          description: Mejl uspesno poslat
+          content:
+            '*/*':
+              schema:
+                type: string
+        "403":
+          description: Nalog nije aktivan
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+        "404":
+          description: Klijent sa datim emailom nije pronadjen
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+  /auth/resend-activation:
+    post:
+      tags:
+      - auth-controller
+      summary: Ponovni zahtev za aktivacioni mejl
+      description: Ponovo salje aktivacioni mejl za nalog koji jos nije aktiviran. Ne zahteva prethodni token.
+      operationId: resendActivation
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordDto"
+        required: true
+      responses:
+        "200":
+          description: Mejl uspesno poslat ili nalog vec aktivan
+          content:
+            '*/*':
+              schema:
+                type: string
+        "404":
+          description: Klijent sa datim emailom nije pronadjen
           content:
             '*/*':
               schema:
@@ -78,6 +207,7 @@ paths:
       tags:
       - client-controller
       summary: Pretrazuje klijente po filterima
+      description: Filtriranje po imenu, prezimenu i emailu uz paginaciju. Zahteva AGENT ulogu.
       operationId: searchClients
       parameters:
       - name: ime
@@ -123,6 +253,7 @@ paths:
       tags:
       - client-controller
       summary: Kreira novog klijenta
+      description: Kreira klijenta i salje aktivacioni mejl. Zahteva AGENT ulogu.
       operationId: createClient
       requestBody:
         content:
@@ -154,6 +285,7 @@ paths:
       tags:
       - client-controller
       summary: Globalna pretraga klijenata
+      description: Pretrazuje klijente jednim upitom po imenu, prezimenu i emailu. Zahteva AGENT ulogu.
       operationId: globalSearchClients
       parameters:
       - name: query
@@ -185,12 +317,106 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PageClientResponseDto"
+  /customers/{id}:
+    get:
+      tags:
+      - client-controller
+      summary: Vraca informacije o klijentu po ID-u
+      description: Interni endpoint dostupan iskljucivo SERVICE i ADMIN tokenima.
+      operationId: getInfoById
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ClientInfoResponseDto"
+        "404":
+          description: Klijent nije pronadjen
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+    put:
+      tags:
+      - client-controller
+      summary: Azurira podatke klijenta
+      description: Azurira dozvoljene podatke klijenta. JMBG i lozinka se ne mogu menjati. Zahteva AGENT ulogu.
+      operationId: updateClient
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientUpdateRequestDto"
+        required: true
+      responses:
+        "200":
+          description: Klijent uspesno azuriran
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ClientResponseDto"
+        "400":
+          description: Neispravni podaci u zahtevu
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+        "404":
+          description: Klijent nije pronadjen
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+        "409":
+          description: Email adresa je vec u upotrebi
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
+    delete:
+      tags:
+      - client-controller
+      summary: Brise klijenta
+      description: Soft-brise klijenta i salje obavesni mejl. Zahteva ADMIN ulogu.
+      operationId: deleteClient
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "204":
+          description: Klijent uspesno obrisan
+        "404":
+          description: Klijent nije pronadjen
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ErrorResponseDto"
   /customers/jmbg/{jmbg}:
     get:
       tags:
       - client-controller
-      summary: Vraca ID klijenta po JMBG-u
-      operationId: getIdByJmbg
+      summary: Vraca informacije o klijentu po JMBG-u
+      description: Interni endpoint dostupan iskljucivo SERVICE i ADMIN tokenima.
+      operationId: getInfoByJmbg
       parameters:
       - name: jmbg
         in: path
@@ -203,7 +429,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/ClientIdResponseDto"
+                $ref: "#/components/schemas/ClientInfoResponseDto"
         "404":
           description: Klijent sa zadatim JMBG-om nije pronadjen
           content:
@@ -212,6 +438,93 @@ paths:
                 $ref: "#/components/schemas/ErrorResponseDto"
 components:
   schemas:
+    LoginRequestDto:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+      - email
+      - password
+    LoginResponseDto:
+      type: object
+      properties:
+        token:
+          type: string
+    CheckActivateDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+    ActivateDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        confirmationToken:
+          type: string
+          minLength: 43
+          maxLength: 43
+        password:
+          type: string
+          minLength: 8
+          maxLength: 32
+          pattern: "^(?=(?:.*\\d){2,})(?=.*[a-z])(?=.*[A-Z])(?=\\S+$).*$"
+      required:
+      - id
+      - confirmationToken
+      - password
+    ForgotPasswordDto:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+    ClientCreateRequestDto:
+      type: object
+      properties:
+        ime:
+          type: string
+          minLength: 1
+        prezime:
+          type: string
+          minLength: 1
+        datumRodjenja:
+          type: integer
+          format: int64
+        pol:
+          type: string
+          enum:
+          - M
+          - Z
+        email:
+          type: string
+          format: email
+          minLength: 1
+        brojTelefona:
+          type: string
+          pattern: "^\\+?[0-9]{8,15}$"
+        adresa:
+          type: string
+        jmbg:
+          type: string
+          minLength: 13
+          maxLength: 13
+          pattern: "^[0-9]{13}$"
+      required:
+      - datumRodjenja
+      - email
+      - ime
+      - jmbg
+      - pol
+      - prezime
     ClientUpdateRequestDto:
       type: object
       properties:
@@ -264,44 +577,21 @@ components:
           type: string
         adresa:
           type: string
-    ClientCreateRequestDto:
-      type: object
-      properties:
-        ime:
-          type: string
-          minLength: 1
-        prezime:
-          type: string
-          minLength: 1
-        datumRodjenja:
-          type: integer
-          format: int64
-        pol:
+        role:
           type: string
           enum:
-          - M
-          - Z
-        email:
+          - CLIENT_BASIC
+          - CLIENT_TRADING
+    ClientInfoResponseDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
           type: string
-          format: email
-          minLength: 1
-        brojTelefona:
+        lastName:
           type: string
-          pattern: "^\\+?[0-9]{8,15}$"
-        adresa:
-          type: string
-        jmbg:
-          type: string
-          maxLength: 13
-          minLength: 13
-          pattern: "^[0-9]{13}$"
-      required:
-      - datumRodjenja
-      - email
-      - ime
-      - jmbg
-      - pol
-      - prezime
     ErrorResponseDto:
       type: object
       properties:
@@ -374,12 +664,6 @@ components:
           type: boolean
         unsorted:
           type: boolean
-    ClientIdResponseDto:
-      type: object
-      properties:
-        id:
-          type: integer
-          format: int64
   securitySchemes:
     BearerAuthentication:
       type: http

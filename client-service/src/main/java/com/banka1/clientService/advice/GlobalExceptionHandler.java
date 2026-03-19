@@ -3,13 +3,14 @@ package com.banka1.clientService.advice;
 import com.banka1.clientService.dto.responses.ErrorResponseDto;
 import com.banka1.clientService.exception.BusinessException;
 import com.banka1.clientService.exception.ErrorCode;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.amqp.AmqpException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Component;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -23,6 +24,7 @@ import java.util.NoSuchElementException;
  * Centralizovani hendler gresaka za sve REST kontrolere.
  * Mapira ocekivane i neocekivane izuzetke na standardizovane HTTP odgovore sa {@link ErrorResponseDto} telom.
  */
+@Slf4j
 @RestControllerAdvice
 @Component("clientServiceGlobalExceptionHandler")
 public class GlobalExceptionHandler {
@@ -66,7 +68,7 @@ public class GlobalExceptionHandler {
         ErrorResponseDto error = new ErrorResponseDto(
                 errorCode.getCode(),
                 errorCode.getTitle(),
-                errorCode.name()
+                errorCode.getTitle()
         );
         return new ResponseEntity<>(error, errorCode.getHttpStatus());
     }
@@ -180,6 +182,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDto> handleUnexpectedException(Exception ex) {
+        log.error("Unexpected exception", ex);
         ErrorResponseDto error = new ErrorResponseDto(
                 "ERR_INTERNAL_SERVER",
                 "Serverska greška",

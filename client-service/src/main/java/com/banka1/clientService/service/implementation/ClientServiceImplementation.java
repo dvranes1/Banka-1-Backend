@@ -1,20 +1,22 @@
 package com.banka1.clientService.service.implementation;
 
+import com.banka1.clientService.domain.ClientConfirmationToken;
 import com.banka1.clientService.domain.Klijent;
 import com.banka1.clientService.dto.rabbitmq.EmailDto;
 import com.banka1.clientService.dto.rabbitmq.EmailType;
 import com.banka1.clientService.dto.requests.ClientCreateRequestDto;
 import com.banka1.clientService.dto.requests.ClientUpdateRequestDto;
-import com.banka1.clientService.dto.responses.ClientIdResponseDto;
+import com.banka1.clientService.dto.responses.ClientInfoResponseDto;
 import com.banka1.clientService.dto.responses.ClientResponseDto;
 import com.banka1.clientService.exception.BusinessException;
 import com.banka1.clientService.exception.ErrorCode;
 import com.banka1.clientService.mappers.ClientMapper;
 import com.banka1.clientService.rabbitMQ.RabbitClient;
+import com.banka1.clientService.repository.ClientConfirmationTokenRepository;
 import com.banka1.clientService.repository.KlijentRepository;
 import com.banka1.clientService.service.ClientService;
+import com.banka1.clientService.service.TokenService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,26 +29,29 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * Sve pretrage koriste LIKE escapovanje radi zastite od SQL injection putem metakaraktera.
  * Email notifikacije se salju asinhorno putem RabbitMQ-a tek nakon uspesnog commita transakcije.
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class ClientServiceImplementation implements ClientService {
 
-    /**
-     * Repozitorijum za pristup entitetima klijenata.
-     */
+    /** Repozitorijum za pristup podacima klijenata u bazi. */
     private final KlijentRepository klijentRepository;
 
-    /**
-     * Mapper za konverziju izmedju DTO i JPA entiteta klijenta.
-     */
+    /** Maper koji konvertuje entitete klijenata u DTO objekte i obratno. */
     private final ClientMapper clientMapper;
 
-    /**
-     * Klijent za slanje email notifikacija putem RabbitMQ-a.
-     */
+    /** Klijent za slanje poruka putem RabbitMQ-a. */
     private final RabbitClient rabbitClient;
+
+    /** Repozitorijum za pristup confirmation tokenima klijenata. */
+    private final ClientConfirmationTokenRepository confirmationTokenRepository;
+
+    /** Servis za generisanje i hesiranje tokena. */
+    private final TokenService tokenService;
+
+    /** Bazni URL za aktivaciju naloga na koji se dodaje generisani token. */
+    @org.springframework.beans.factory.annotation.Value("${url.activate-account}")
+    private String urlActivateAccount;
 
     /**
      * Kreira novog klijenta i salje notifikacioni mejl nakon uspesnog commita transakcije.
@@ -59,22 +64,22 @@ public class ClientServiceImplementation implements ClientService {
         Klijent klijent = clientMapper.toEntity(dto);
         Klijent saved = klijentRepository.save(klijent);
 
+        String generated = tokenService.generateRandomToken();
+        ClientConfirmationToken confirmationToken = new ClientConfirmationToken(
+                tokenService.sha256Hex(generated), saved);
+        confirmationTokenRepository.save(confirmationToken);
+        saved.setConfirmationToken(confirmationToken);
+
         EmailDto emailDto = new EmailDto(
                 saved.getIme(),
                 saved.getEmail(),
-                EmailType.CLIENT_CREATED);
+                EmailType.CLIENT_CREATED,
+                urlActivateAccount + generated);
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 rabbitClient.sendEmailNotification(emailDto);
-            }
-
-            @Override
-            public void afterCompletion(int status) {
-                if (status == STATUS_ROLLED_BACK) {
-                    log.warn("Transakcija je ponistena — preskacemo slanje email notifikacije za klijenta: {}", emailDto.getUserEmail());
-                }
             }
         });
 
@@ -151,6 +156,14 @@ public class ClientServiceImplementation implements ClientService {
         Klijent klijent = klijentRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CLIENT_NOT_FOUND, "ID: " + id));
         klijentRepository.delete(klijent);
+
+        EmailDto emailDto = new EmailDto(klijent.getIme(), klijent.getEmail(), EmailType.CLIENT_ACCOUNT_DEACTIVATED);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                rabbitClient.sendEmailNotification(emailDto);
+            }
+        });
     }
 
     /**
@@ -162,10 +175,25 @@ public class ClientServiceImplementation implements ClientService {
      */
     @Override
     @Transactional(readOnly = true)
-    public ClientIdResponseDto getIdByJmbg(String jmbg) {
+    public ClientInfoResponseDto getInfoByJmbg(String jmbg) {
         Klijent klijent = klijentRepository.findByJmbg(jmbg)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JMBG_NOT_FOUND, "JMBG: [PROTECTED]"));
-        return new ClientIdResponseDto(klijent.getId());
+        return new ClientInfoResponseDto(klijent.getId(),klijent.getIme(),klijent.getPrezime());
+    }
+
+    /**
+     * Vraca osnovne informacije o klijentu na osnovu internog ID-a.
+     *
+     * @param id identifikator klijenta
+     * @return DTO sa ID-em, imenom i prezimenom klijenta
+     * @throws BusinessException ako klijent sa zadatim ID-em nije pronadjen
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ClientInfoResponseDto getInfoById(Long id) {
+        Klijent klijent = klijentRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CLIENT_NOT_FOUND, "ID: " + id));
+        return new ClientInfoResponseDto(klijent.getId(), klijent.getIme(), klijent.getPrezime());
     }
 
     /**
