@@ -228,9 +228,9 @@ class ClientMapperTest {
     }
 
     @Test
-    void blankPhoneIsStoredAsBlank() {
+    void blankPhoneIsStoredAsNull() {
         Klijent k = new Klijent();
         k.setBrojTelefona("   ");
-        assertThat(k.getBrojTelefona()).isEqualTo("   ");
+        assertThat(k.getBrojTelefona()).isNull();
     }
 }

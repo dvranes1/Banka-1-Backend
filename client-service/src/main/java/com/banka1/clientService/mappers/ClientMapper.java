@@ -29,13 +29,12 @@ public interface ClientMapper {
     @Mapping(target = "createdAt",    ignore = true)
     @Mapping(target = "updatedAt",    ignore = true)
     @Mapping(target = "password",     ignore = true)
-    @Mapping(target = "saltPassword", ignore = true)
     @Mapping(target = "role",         ignore = true)
     Klijent toEntity(ClientCreateRequestDto dto);
 
     /**
      * Mapira entitet klijenta u izlazni DTO.
-     * Osetljivi podaci (password, saltPassword, jmbg) nisu u {@link ClientResponseDto} — automatski se preskacu.
+     * Osetljivi podaci (password, jmbg) nisu u {@link ClientResponseDto} — automatski se preskacu.
      */
     ClientResponseDto toDto(Klijent klijent);
 
@@ -51,7 +50,6 @@ public interface ClientMapper {
     @Mapping(target = "createdAt",    ignore = true)
     @Mapping(target = "updatedAt",    ignore = true)
     @Mapping(target = "password",     ignore = true)
-    @Mapping(target = "saltPassword", ignore = true)
     @Mapping(target = "jmbg",         ignore = true)
     @Mapping(target = "role",         ignore = true)
     void updateEntityFromDto(@MappingTarget Klijent klijent, ClientUpdateRequestDto dto);

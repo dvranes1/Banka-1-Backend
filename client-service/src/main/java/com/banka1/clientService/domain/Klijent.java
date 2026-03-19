@@ -83,7 +83,7 @@ public class Klijent extends BaseEntity {
 
     public void setBrojTelefona(String brojTelefona) {
         if (brojTelefona == null || brojTelefona.isBlank()) {
-            this.brojTelefona = brojTelefona;
+            this.brojTelefona = null;
             return;
         }
         String t = brojTelefona.strip();
@@ -114,12 +114,6 @@ public class Klijent extends BaseEntity {
      * Hesh lozinke klijenta (Argon2 ili slicno).
      */
     private String password;
-
-    /**
-     * Salt koji se koristi pri hesiranju lozinke.
-     */
-    @Column(name = "salt_password")
-    private String saltPassword;
 
     /**
      * Jedinstveni maticni broj gradjana klijenta – ne moze se menjati nakon kreiranja.

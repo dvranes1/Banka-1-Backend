@@ -5,7 +5,7 @@ import com.banka1.clientService.domain.enums.ClientRole;
 import com.banka1.clientService.domain.enums.Pol;
 import com.banka1.clientService.dto.requests.ClientCreateRequestDto;
 import com.banka1.clientService.dto.requests.ClientUpdateRequestDto;
-import com.banka1.clientService.dto.responses.ClientIdResponseDto;
+import com.banka1.clientService.dto.responses.ClientInfoResponseDto;
 import com.banka1.clientService.dto.responses.ClientResponseDto;
 import com.banka1.clientService.exception.BusinessException;
 import com.banka1.clientService.exception.ErrorCode;
@@ -183,7 +183,7 @@ class ClientControllerWebMvcTest {
 
     @Test
     void getClientIdByJmbgReturnsId() throws Exception {
-        when(clientService.getIdByJmbg("1234567890123")).thenReturn(new ClientIdResponseDto(42L));
+        when(clientService.getInfoByJmbg("1234567890123")).thenReturn(new ClientInfoResponseDto(42L,"Pickka","Pickic"));
 
         mockMvc.perform(get("/customers/jmbg/1234567890123"))
                 .andExpect(status().isOk())
@@ -193,7 +193,7 @@ class ClientControllerWebMvcTest {
     @Test
     void getClientIdByJmbgReturnsNotFoundWhenJmbgMissing() throws Exception {
         doThrow(new BusinessException(ErrorCode.JMBG_NOT_FOUND, "JMBG: [PROTECTED]"))
-                .when(clientService).getIdByJmbg("9999999999999");
+                .when(clientService).getInfoByJmbg("9999999999999");
 
         mockMvc.perform(get("/customers/jmbg/9999999999999"))
                 .andExpect(status().isNotFound())

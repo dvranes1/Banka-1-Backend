@@ -6,7 +6,7 @@ import lombok.Data;
 
 /**
  * DTO za zahtev kreiranja novog klijenta.
- * Sva polja su obavezna osim {@code brojTelefona}, {@code adresa} i {@code saltPassword}.
+ * Sva polja su obavezna osim {@code brojTelefona} i {@code adresa}.
  */
 @Data
 public class ClientCreateRequestDto {

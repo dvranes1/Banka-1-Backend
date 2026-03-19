@@ -5,7 +5,7 @@ import com.banka1.clientService.domain.enums.ClientRole;
 import com.banka1.clientService.domain.enums.Pol;
 import com.banka1.clientService.dto.requests.ClientCreateRequestDto;
 import com.banka1.clientService.dto.requests.ClientUpdateRequestDto;
-import com.banka1.clientService.dto.responses.ClientIdResponseDto;
+import com.banka1.clientService.dto.responses.ClientInfoResponseDto;
 import com.banka1.clientService.dto.responses.ClientResponseDto;
 import com.banka1.clientService.exception.BusinessException;
 import com.banka1.clientService.exception.ErrorCode;
@@ -264,7 +264,7 @@ class ClientServiceImplementationTest {
     void getClientIdByJmbgThrowsWhenNotFound() {
         when(klijentRepository.findByJmbg("9999999999999")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> clientService.getIdByJmbg("9999999999999"))
+        assertThatThrownBy(() -> clientService.getInfoByJmbg("9999999999999"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.JMBG_NOT_FOUND);
@@ -277,7 +277,7 @@ class ClientServiceImplementationTest {
 
         when(klijentRepository.findByJmbg("1234567890123")).thenReturn(Optional.of(existing));
 
-        ClientIdResponseDto result = clientService.getIdByJmbg("1234567890123");
+        ClientInfoResponseDto result = clientService.getInfoByJmbg("1234567890123");
 
         assertThat(result.getId()).isEqualTo(7L);
     }
