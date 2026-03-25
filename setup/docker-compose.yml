@@ -91,13 +91,10 @@ services:
       timeout: 5s
       retries: 10
 
+  # Postgres for Transfer Service
   postgres_transfer:
     image: postgres:16
     container_name: postgres_transfer_db
-  # Postgres for Exchange Service
-  postgres_exchange:
-    image: postgres:16
-    container_name: postgres_exchange_db
     restart: unless-stopped
     env_file:
       - .env
@@ -113,11 +110,23 @@ services:
       - banka-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${TRANSFER_DB_USER:-postgres} -d ${TRANSFER_DB_NAME:-transferdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Postgres for Exchange Service
+  postgres_exchange:
+    image: postgres:16
+    container_name: postgres_exchange_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
       POSTGRES_DB: ${EXCHANGE_DB_NAME:-exchange_db}
       POSTGRES_USER: ${EXCHANGE_DB_USER:-postgres}
       POSTGRES_PASSWORD: ${EXCHANGE_DB_PASSWORD:-postgres}
     ports:
-      - "${EXCHANGE_DB_EX_PORT:-5437}:5432"
+      - "${EXCHANGE_DB_EX_PORT:-5439}:5432"
     volumes:
       - postgres-exchange-data:/var/lib/postgresql/data
     networks:
@@ -235,6 +244,7 @@ services:
       - employee-service-logs:/var/log/services/employee:ro
       - client-service-logs:/var/log/services/client:ro
       - account-service-logs:/var/log/services/account:ro
+      - transfer-service-logs:/var/log/services/transfer:ro
       - exchange-service-logs:/var/log/services/exchange:ro
       - verification-service-logs:/var/log/services/verification:ro
     depends_on:
@@ -459,6 +469,7 @@ services:
       retries: 10
       start_period: 30s
 
+  # Transfer Service
   transfer-service:
     build:
       context: ..
@@ -466,6 +477,60 @@ services:
       args:
         SERVER_PORT: ${TRANSFER_SERVICE_PORT:-8085}
     container_name: banka_transfer_service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: ${TRANSFER_SERVICE_PORT:-8085}
+      DB_HOST: postgres_transfer
+      DB_PORT: 5432
+      DB_NAME: ${TRANSFER_DB_NAME:-transferdb}
+      DB_USER: ${TRANSFER_DB_USER:-postgres}
+      DB_PASSWORD: ${TRANSFER_DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      NOTIFICATION_QUEUE: ${NOTIFICATION_QUEUE:-notification-service-queue}
+      NOTIFICATION_EXCHANGE: ${NOTIFICATION_EXCHANGE:-employee.events}
+      NOTIFICATION_ROUTING_KEY: ${NOTIFICATION_ROUTING_KEY:-employee.#}
+      CLIENT_SERVICE_HOST: client-service
+      CLIENT_SERVER_PORT: ${CLIENT_SERVER_PORT:-8083}
+      ACCOUNT_SERVICE_HOST: account-service
+      ACCOUNT_SERVER_PORT: ${ACCOUNT_SERVER_PORT:-8084}
+      EXCHANGE_SERVICE_HOST: exchange-service
+      EXCHANGE_SERVER_PORT: ${EXCHANGE_SERVER_PORT:-8085}
+      VERIFICATION_SERVICE_HOST: verification-service
+      VERIFICATION_SERVER_PORT: ${VERIFICATION_SERVER_PORT:-8086}
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_SERVICE_NAME: transferService
+      LOGGING_FILE_PATH: /var/log/banka
+    depends_on:
+      postgres_transfer:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    expose:
+      - "${TRANSFER_SERVICE_PORT:-8085}"
+    networks:
+      - banka-network
+    volumes:
+      - transfer-service-logs:/var/log/banka
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${TRANSFER_SERVICE_PORT:-8085}/actuator/health/liveness || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   # Exchange Service
   exchange-service:
     build:
@@ -478,30 +543,15 @@ services:
     env_file:
       - .env
     environment:
-      SPRING_PROFILES_ACTIVE: dev
-      DB_HOST: postgres_transfer
-      DB_PORT: 5432
-      DB_NAME: ${TRANSFER_DB_NAME:-transferdb}
-      DB_USER: ${TRANSFER_DB_USER:-postgres}
-      DB_PASSWORD: ${TRANSFER_DB_PASSWORD:-postgres}
-      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
-      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
-      SERVER_PORT: ${TRANSFER_SERVICE_PORT:-8085}
-      JWT_SECRET: ${JWT_SECRET}
-
-      CLIENT_SERVICE_URL: http://client-service:${CLIENT_SERVER_PORT:-8083}
-      ACCOUNT_SERVICE_URL: http://account-service:${ACCOUNT_SERVER_PORT:-8084}
-      EXCHANGE_SERVICE_URL: http://exchange-service:${EXCHANGE_SERVER_PORT:-8082}
-      VERIFICATION_SERVICE_URL: http://verification-service:${VERIFICATION_SERVER_PORT:-8080}
-
-      EXCHANGE_SERVICE_HOST: ${EXCHANGE_SERVICE_HOST:-0.0.0.0}
+      EXCHANGE_SERVICE_HOST: 0.0.0.0
       EXCHANGE_SERVER_PORT: ${EXCHANGE_SERVER_PORT:-8085}
       EXCHANGE_DB_HOST: postgres_exchange
-      EXCHANGE_DB_PORT: ${EXCHANGE_DB_PORT:-5432}
+      EXCHANGE_DB_PORT: 5432
       EXCHANGE_DB_NAME: ${EXCHANGE_DB_NAME:-exchange_db}
       EXCHANGE_DB_USER: ${EXCHANGE_DB_USER:-postgres}
       EXCHANGE_DB_PASSWORD: ${EXCHANGE_DB_PASSWORD:-postgres}
       JWT_SECRET: ${JWT_SECRET}
+      TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY:-}
       MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
@@ -550,9 +600,9 @@ services:
       RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
-      NOTIFICATION_QUEUE: ${NOTIFICATION_QUEUE}
-      NOTIFICATION_EXCHANGE: ${NOTIFICATION_EXCHANGE}
-      NOTIFICATION_ROUTING_KEY: ${NOTIFICATION_ROUTING_KEY}
+      NOTIFICATION_QUEUE: ${NOTIFICATION_QUEUE:-notification-service-queue}
+      NOTIFICATION_EXCHANGE: ${NOTIFICATION_EXCHANGE:-employee.events}
+      NOTIFICATION_ROUTING_KEY: ${NOTIFICATION_ROUTING_KEY:-employee.#}
       JWT_SECRET: ${JWT_SECRET}
       MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
@@ -560,9 +610,6 @@ services:
       OTEL_TRACES_EXPORTER: otlp
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
-      OTEL_SERVICE_NAME: transferService
-    depends_on:
-      postgres_transfer:
       OTEL_SERVICE_NAME: verificationService
       LOGGING_FILE_PATH: /var/log/banka
     depends_on:
@@ -573,11 +620,6 @@ services:
       otel-collector:
         condition: service_started
     expose:
-      - "${TRANSFER_SERVICE_PORT:-8085}"
-    networks:
-      - banka-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:${TRANSFER_SERVICE_PORT:-8085}/actuator/health/liveness || exit 1"]
       - "${VERIFICATION_SERVER_PORT:-8086}"
     networks:
       - banka-network
@@ -637,7 +679,6 @@ volumes:
   postgres-client-data:
   postgres-account-data:
   postgres-transfer-data:
-  grafana-data:
   postgres-exchange-data:
   postgres-verification-data:
   grafana-data:
@@ -646,5 +687,6 @@ volumes:
   employee-service-logs:
   client-service-logs:
   account-service-logs:
+  transfer-service-logs:
   exchange-service-logs:
   verification-service-logs:
