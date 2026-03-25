@@ -8,7 +8,7 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class ClientService {
 
-    private final RestClient clientServiceClient;
+    private final RestClient restClient;
 
 //    public ClientInfoResponseDto getUser(String jmbg) {
 //        return clientServiceClient.get()

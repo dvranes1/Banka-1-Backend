@@ -28,8 +28,8 @@ import java.math.BigDecimal;
 @Getter
 @Setter
 public class Payment extends BaseEntityWithoutDelete {
-    @NotBlank
-    @Column(nullable = false,unique = true)
+
+    @Column(unique = true)
     private String orderNumber;
     @NotBlank
     @Column(nullable = false)

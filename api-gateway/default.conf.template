@@ -58,6 +58,26 @@ server {
             proxy_set_header X-Forwarded-Prefix /api/transfers;
         }
 
+    # Account Service Swagger UI
+    location /accounts/swagger-ui/ {
+        proxy_pass http://account_service/swagger-ui/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /accounts;
+    }
+
+    # Account Service OpenAPI docs
+    location /accounts/v3/api-docs {
+        proxy_pass http://account_service/v3/api-docs;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /accounts;
+    }
+
     # Health check
     location /gateway-health {
         access_log off;

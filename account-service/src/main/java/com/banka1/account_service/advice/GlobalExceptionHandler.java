@@ -8,6 +8,8 @@ import org.springframework.amqp.AmqpException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -96,6 +98,26 @@ public class GlobalExceptionHandler {
      * @param ex neocekivani izuzetak
      * @return HTTP 500 odgovor sa standardizovanim telom greske
      */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponseDto> handleAccessDenied(AccessDeniedException ex) {
+        ErrorResponseDto error = new ErrorResponseDto(
+                "ERR_FORBIDDEN",
+                "Pristup odbijen",
+                "Nemate dozvolu za ovu akciju."
+        );
+        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponseDto> handleAuthenticationException(AuthenticationException ex) {
+        ErrorResponseDto error = new ErrorResponseDto(
+                "ERR_UNAUTHORIZED",
+                "Neautorizovan pristup",
+                "Niste autentifikovani."
+        );
+        return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDto> handleUnexpectedException(Exception ex) {
         ErrorResponseDto error = new ErrorResponseDto(

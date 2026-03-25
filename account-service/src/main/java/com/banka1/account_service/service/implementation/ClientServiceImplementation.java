@@ -2,20 +2,36 @@ package com.banka1.account_service.service.implementation;
 
 import com.banka1.account_service.domain.Account;
 import com.banka1.account_service.domain.enums.Status;
+import com.banka1.account_service.domain.enums.VerificationStatus;
 import com.banka1.account_service.dto.request.EditAccountLimitDto;
 import com.banka1.account_service.dto.request.EditAccountNameDto;
-import com.banka1.account_service.dto.response.AccountDetailsResponseDto;
-import com.banka1.account_service.dto.response.AccountResponseDto;
-import com.banka1.account_service.dto.response.CardResponseDto;
+import com.banka1.account_service.dto.request.EditStatus;
+import com.banka1.account_service.dto.request.ValidateRequest;
+import com.banka1.account_service.rabbitMQ.CardEventDto;
+import com.banka1.account_service.rabbitMQ.CardEventType;
+import com.banka1.account_service.rest_client.CardServiceRestClient;
+import com.banka1.account_service.dto.response.*;
+import com.banka1.account_service.exception.BusinessException;
+import com.banka1.account_service.exception.ErrorCode;
+import com.banka1.account_service.rabbitMQ.EmailDto;
+import com.banka1.account_service.rabbitMQ.EmailType;
+import com.banka1.account_service.rabbitMQ.RabbitClient;
 import com.banka1.account_service.repository.AccountRepository;
+import com.banka1.account_service.rest_client.RestClientService;
+import com.banka1.account_service.rest_client.VerificationService;
 import com.banka1.account_service.service.ClientService;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +39,12 @@ public class ClientServiceImplementation implements ClientService {
     private final AccountRepository accountRepository;
     @Value("${banka.security.id}")
     private String appPropertiesId;
+
+    private final VerificationService verificationService;
+    private final RabbitClient rabbitClient;
+    private final RestClientService restClientService;
+    private final CardServiceRestClient cardServiceRestClient;
+
 
 //    @Override
 //    public String newPayment(Jwt jwt, NewPaymentDto newPaymentDto) {
@@ -67,6 +89,18 @@ public class ClientServiceImplementation implements ClientService {
     @Override
     public String editAccountName(Jwt jwt, Long id, EditAccountNameDto editAccountNameDto) {
         Account account=accountRepository.findById(id).orElse(null);
+        return editName(jwt, editAccountNameDto, account);
+    }
+
+    @Transactional
+    @Override
+    public String editAccountName(Jwt jwt, String accountNumber, EditAccountNameDto editAccountNameDto) {
+        Account account=accountRepository.findByBrojRacuna(accountNumber).orElse(null);
+        return editName(jwt, editAccountNameDto, account);
+    }
+
+    @NonNull
+    private String editName(Jwt jwt, EditAccountNameDto editAccountNameDto, Account account) {
         validation(account,jwt);
         if(account.getNazivRacuna().equalsIgnoreCase(editAccountNameDto.getAccountName()))
             throw new IllegalArgumentException("Ime ne sme biti isto");
@@ -80,13 +114,31 @@ public class ClientServiceImplementation implements ClientService {
     @Override
     public String editAccountLimit(Jwt jwt, Long id, EditAccountLimitDto editAccountLimitDto) {
         Account account=accountRepository.findById(id).orElse(null);
-        validation(account,jwt);
-        if(editAccountLimitDto.getTipLimita() == EditAccountLimitDto.TipLimita.DNEVNI)
-            account.setDnevniLimit(editAccountLimitDto.getAccountLimit());
-        else
-            account.setMesecniLimit(editAccountLimitDto.getAccountLimit());
+        return editLimit(jwt, editAccountLimitDto, account);
+    }
 
-        return "Uspesno setovan limit";
+    @Transactional
+    @Override
+    public String editAccountLimit(Jwt jwt, String accountNumber, EditAccountLimitDto editAccountLimitDto) {
+        Account account=accountRepository.findByBrojRacuna(accountNumber).orElse(null);
+        return editLimit(jwt, editAccountLimitDto, account);
+    }
+
+    @NonNull
+    private String editLimit(Jwt jwt, EditAccountLimitDto editAccountLimitDto, Account account) {
+        validation(account,jwt);
+
+        if(editAccountLimitDto.getDailyLimit().compareTo(editAccountLimitDto.getMonthlyLimit()) > 0)
+            throw new IllegalArgumentException("Dnevni limit mora biti manji ili jednak od mesecnog");
+
+        ValidateResponse validateResponse=verificationService.validate(new ValidateRequest(editAccountLimitDto.getVerificationSessionId(),editAccountLimitDto.getVerificationCode()));
+        if(validateResponse==null || validateResponse.getStatus()!= VerificationStatus.VERIFIED)
+            throw new BusinessException(ErrorCode.VERIFICATION_FAILED,ErrorCode.VERIFICATION_FAILED.getTitle());
+
+        account.setDnevniLimit(editAccountLimitDto.getDailyLimit());
+        account.setMesecniLimit(editAccountLimitDto.getMonthlyLimit());
+
+        return "Uspesno setovani limiti";
     }
 
     @Transactional
@@ -98,7 +150,42 @@ public class ClientServiceImplementation implements ClientService {
     }
 
     @Override
+    @Transactional
+    public AccountDetailsResponseDto getDetails(Jwt jwt, String accountNumber) {
+        Account account=accountRepository.findByBrojRacuna(accountNumber).orElse(null);
+        validation(account,jwt);
+        return new AccountDetailsResponseDto(account);
+    }
+
+    @Override
     public Page<CardResponseDto> findAllCards(Jwt jwt, Long id, int page, int size) {
-        return null;
+        Account account = accountRepository.findById(id).orElse(null);
+        validation(account, jwt);
+        List<CardResponseDto> cards = cardServiceRestClient.getCardsForAccount(account.getBrojRacuna());
+        int start = page * size;
+        int end = Math.min(start + size, cards.size());
+        List<CardResponseDto> pageContent = start >= cards.size() ? List.of() : cards.subList(start, end);
+        return new org.springframework.data.domain.PageImpl<>(pageContent, PageRequest.of(page, size), cards.size());
+    }
+
+    @Override
+    @Transactional
+    public String editStatus(Jwt jwt, String accountNumber, EditStatus editStatus) {
+        Account account=accountRepository.findByBrojRacuna(accountNumber).orElse(null);
+        if(account==null)
+            throw new IllegalArgumentException("Ne postoji racun: " + accountNumber);
+        account.setStatus(editStatus.getStatus());
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                if (editStatus.getStatus() == Status.INACTIVE) {
+                    if (account.getUsername() != null && account.getEmail() != null) {
+                        rabbitClient.sendEmailNotification(new EmailDto(account.getUsername(), account.getEmail(), EmailType.ACCOUNT_DEACTIVATED));
+                    }
+                    rabbitClient.sendCardEvent(new CardEventDto(account.getVlasnik(), account.getBrojRacuna(), CardEventType.CARD_DEACTIVATE));
+                }
+            }
+        });
+        return "Uspesno editovan status";
     }
 }
