@@ -19,3 +19,10 @@ datasources:
     uid: loki
     url: http://loki:3100
     editable: false
+    jsonData:
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"traceId"\s*:\s*"([a-f0-9]+)"'
+          url: "${__value.raw}"
+          datasourceUid: jaeger
+          urlDisplayLabel: "View Trace in Jaeger"
