@@ -94,6 +94,10 @@ services:
   postgres_transfer:
     image: postgres:16
     container_name: postgres_transfer_db
+  # Postgres for Exchange Service
+  postgres_exchange:
+    image: postgres:16
+    container_name: postgres_exchange_db
     restart: unless-stopped
     env_file:
       - .env
@@ -109,6 +113,40 @@ services:
       - banka-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${TRANSFER_DB_USER:-postgres} -d ${TRANSFER_DB_NAME:-transferdb}"]
+      POSTGRES_DB: ${EXCHANGE_DB_NAME:-exchange_db}
+      POSTGRES_USER: ${EXCHANGE_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${EXCHANGE_DB_PASSWORD:-postgres}
+    ports:
+      - "${EXCHANGE_DB_EX_PORT:-5437}:5432"
+    volumes:
+      - postgres-exchange-data:/var/lib/postgresql/data
+    networks:
+      - banka-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EXCHANGE_DB_USER:-postgres} -d ${EXCHANGE_DB_NAME:-exchange_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Postgres for Verification Service
+  postgres_verification:
+    image: postgres:16
+    container_name: postgres_verification_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${VERIFICATION_DB_NAME:-verificationdb}
+      POSTGRES_USER: ${VERIFICATION_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${VERIFICATION_DB_PASSWORD:-postgres}
+    ports:
+      - "${VERIFICATION_DB_EX_PORT:-5438}:5432"
+    volumes:
+      - postgres-verification-data:/var/lib/postgresql/data
+    networks:
+      - banka-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VERIFICATION_DB_USER:-postgres} -d ${VERIFICATION_DB_NAME:-verificationdb}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -173,6 +211,37 @@ services:
     networks:
       - banka-network
 
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: banka_loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - banka-network
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: banka_promtail
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/config.yaml"]
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - notification-service-logs:/var/log/services/notification:ro
+      - employee-service-logs:/var/log/services/employee:ro
+      - client-service-logs:/var/log/services/client:ro
+      - account-service-logs:/var/log/services/account:ro
+      - exchange-service-logs:/var/log/services/exchange:ro
+      - verification-service-logs:/var/log/services/verification:ro
+    depends_on:
+      - loki
+    networks:
+      - banka-network
+
   grafana:
     image: grafana/grafana:11.1.0
     container_name: banka_grafana
@@ -187,6 +256,7 @@ services:
     depends_on:
       - prometheus
       - jaeger
+      - loki
     networks:
       - banka-network
 
@@ -218,6 +288,7 @@ services:
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
       OTEL_SERVICE_NAME: notification-service
+      LOGGING_FILE_PATH: /var/log/banka
     depends_on:
       postgres_notification:
         condition: service_healthy
@@ -229,6 +300,8 @@ services:
       - "${NOTIFICATION_SERVER_PORT:-8006}"
     networks:
       - banka-network
+    volumes:
+      - notification-service-logs:/var/log/banka
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${NOTIFICATION_SERVER_PORT:-8006}/actuator/health/liveness || exit 1"]
       interval: 15s
@@ -263,6 +336,7 @@ services:
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
       OTEL_SERVICE_NAME: employeeService
+      LOGGING_FILE_PATH: /var/log/banka
     depends_on:
       postgres_user:
         condition: service_healthy
@@ -274,6 +348,8 @@ services:
       - "${USER_SERVER_PORT:-8081}"
     networks:
       - banka-network
+    volumes:
+      - employee-service-logs:/var/log/banka
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${USER_SERVER_PORT:-8081}/actuator/health/liveness || exit 1"]
       interval: 15s
@@ -305,6 +381,7 @@ services:
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
       OTEL_SERVICE_NAME: clientService
+      LOGGING_FILE_PATH: /var/log/banka
     depends_on:
       postgres_client:
         condition: service_healthy
@@ -316,6 +393,8 @@ services:
       - "${CLIENT_SERVER_PORT:-8083}"
     networks:
       - banka-network
+    volumes:
+      - client-service-logs:/var/log/banka
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${CLIENT_SERVER_PORT:-8083}/actuator/health/liveness || exit 1"]
       interval: 15s
@@ -359,6 +438,7 @@ services:
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
       OTEL_SERVICE_NAME: accountService
+      LOGGING_FILE_PATH: /var/log/banka
     depends_on:
       postgres_account:
         condition: service_healthy
@@ -370,6 +450,8 @@ services:
       - "${ACCOUNT_SERVER_PORT:-8084}:${ACCOUNT_SERVER_PORT:-8084}"
     networks:
       - banka-network
+    volumes:
+      - account-service-logs:/var/log/banka
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${ACCOUNT_SERVER_PORT:-8084}/actuator/health/liveness || exit 1"]
       interval: 15s
@@ -384,6 +466,14 @@ services:
       args:
         SERVER_PORT: ${TRANSFER_SERVICE_PORT:-8085}
     container_name: banka_transfer_service
+  # Exchange Service
+  exchange-service:
+    build:
+      context: ..
+      dockerfile: exchange-service/Dockerfile
+      args:
+        SERVER_PORT: ${EXCHANGE_SERVER_PORT:-8085}
+    container_name: exchange-service
     restart: unless-stopped
     env_file:
       - .env
@@ -404,6 +494,66 @@ services:
       EXCHANGE_SERVICE_URL: http://exchange-service:${EXCHANGE_SERVER_PORT:-8082}
       VERIFICATION_SERVICE_URL: http://verification-service:${VERIFICATION_SERVER_PORT:-8080}
 
+      EXCHANGE_SERVICE_HOST: ${EXCHANGE_SERVICE_HOST:-0.0.0.0}
+      EXCHANGE_SERVER_PORT: ${EXCHANGE_SERVER_PORT:-8085}
+      EXCHANGE_DB_HOST: postgres_exchange
+      EXCHANGE_DB_PORT: ${EXCHANGE_DB_PORT:-5432}
+      EXCHANGE_DB_NAME: ${EXCHANGE_DB_NAME:-exchange_db}
+      EXCHANGE_DB_USER: ${EXCHANGE_DB_USER:-postgres}
+      EXCHANGE_DB_PASSWORD: ${EXCHANGE_DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET}
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_SERVICE_NAME: exchange-service
+      LOGGING_FILE_PATH: /var/log/banka
+    depends_on:
+      postgres_exchange:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    expose:
+      - "${EXCHANGE_SERVER_PORT:-8085}"
+    networks:
+      - banka-network
+    volumes:
+      - exchange-service-logs:/var/log/banka
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${EXCHANGE_SERVER_PORT:-8085}/actuator/health/liveness || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Verification Service
+  verification-service:
+    build:
+      context: ..
+      dockerfile: verification-service/Dockerfile
+      args:
+        SERVER_PORT: ${VERIFICATION_SERVER_PORT:-8086}
+    container_name: banka_verification_service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      VERIFICATION_SERVER_PORT: ${VERIFICATION_SERVER_PORT:-8086}
+      VERIFICATION_DB_HOST: postgres_verification
+      VERIFICATION_DB_PORT: 5432
+      VERIFICATION_DB_NAME: ${VERIFICATION_DB_NAME:-verificationdb}
+      VERIFICATION_DB_USER: ${VERIFICATION_DB_USER:-postgres}
+      VERIFICATION_DB_PASSWORD: ${VERIFICATION_DB_PASSWORD:-postgres}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      NOTIFICATION_QUEUE: ${NOTIFICATION_QUEUE}
+      NOTIFICATION_EXCHANGE: ${NOTIFICATION_EXCHANGE}
+      NOTIFICATION_ROUTING_KEY: ${NOTIFICATION_ROUTING_KEY}
+      JWT_SECRET: ${JWT_SECRET}
       MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
@@ -413,6 +563,10 @@ services:
       OTEL_SERVICE_NAME: transferService
     depends_on:
       postgres_transfer:
+      OTEL_SERVICE_NAME: verificationService
+      LOGGING_FILE_PATH: /var/log/banka
+    depends_on:
+      postgres_verification:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -424,6 +578,13 @@ services:
       - banka-network
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${TRANSFER_SERVICE_PORT:-8085}/actuator/health/liveness || exit 1"]
+      - "${VERIFICATION_SERVER_PORT:-8086}"
+    networks:
+      - banka-network
+    volumes:
+      - verification-service-logs:/var/log/banka
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${VERIFICATION_SERVER_PORT:-8086}/actuator/health/liveness || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -444,12 +605,18 @@ services:
       CLIENT_SERVICE_PORT: ${CLIENT_SERVER_PORT:-8083}
       ACCOUNT_SERVICE_PORT: ${ACCOUNT_SERVER_PORT:-8084}
       TRANSFER_SERVICE_PORT: ${TRANSFER_SERVICE_PORT:-8085}
+      EXCHANGE_SERVER_PORT: ${EXCHANGE_SERVER_PORT:-8085}
+      VERIFICATION_SERVER_PORT: ${VERIFICATION_SERVER_PORT:-8086}
     depends_on:
       employee-service:
         condition: service_healthy
       client-service:
         condition: service_healthy
       account-service:
+        condition: service_healthy
+      exchange-service:
+        condition: service_healthy
+      verification-service:
         condition: service_healthy
     networks:
       - banka-network
@@ -471,3 +638,13 @@ volumes:
   postgres-account-data:
   postgres-transfer-data:
   grafana-data:
+  postgres-exchange-data:
+  postgres-verification-data:
+  grafana-data:
+  loki-data:
+  notification-service-logs:
+  employee-service-logs:
+  client-service-logs:
+  account-service-logs:
+  exchange-service-logs:
+  verification-service-logs:
