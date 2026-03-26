@@ -35,6 +35,7 @@ public class AccountClientImpl implements AccountClient {
         } catch (HttpClientErrorException.NotFound e) {
             throw new BusinessException(ErrorCode.ACCOUNT_NOT_FOUND, "Račun " + accountNumber + " ne postoji.");
         } catch (Exception e) {
+            log.error("Account service error for account {}: {}", accountNumber, e.getMessage());
             throw new BusinessException(ErrorCode.TRANSFER_NOT_FOUND, "Servis računa nije dostupan.");
         }
     }

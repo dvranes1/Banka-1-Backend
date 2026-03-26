@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.NoSuchElementException;
 
 /**
  * Implementacija servisa za izvrsavanje internih transakcija i transfera.
@@ -134,7 +135,7 @@ public class AccountServiceImplementation implements AccountService {
     public InternalAccountDetailsDto getAccountDetails(String accountNumber) {
         Account account = accountRepository.findByBrojRacuna(accountNumber).orElse(null);
         if (account == null)
-            throw new IllegalArgumentException("Ne postoji racun:" + accountNumber);
+            throw new NoSuchElementException("Ne postoji racun:" + accountNumber);
         return InternalAccountDetailsDto.from(account);
     }
 
