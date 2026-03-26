@@ -59,11 +59,11 @@ public abstract class Account extends BaseEntity{
 
     /** Email adresa vlasnika racuna, koristi se za slanje notifikacija. */
     @Email
-    @Column(unique = true)
+    @Column
     private String email;
 
     /** Korisnicko ime vlasnika racuna, koristi se za slanje notifikacija. */
-    @Column(unique = true)
+    @Column
     private String username;
 
     /** Korisnicki naziv racuna koji vlasnik moze menjati. */
