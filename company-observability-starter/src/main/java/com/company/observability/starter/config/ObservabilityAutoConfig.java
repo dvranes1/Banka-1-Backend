@@ -14,6 +14,7 @@ import com.company.observability.starter.service.UserIdMdcService;
 import com.company.observability.starter.web.GlobalExceptionHandler;
 import com.company.observability.starter.web.filter.CorrelationIdFilter;
 import com.company.observability.starter.web.filter.HttpRequestLoggingFilter;
+import com.company.observability.starter.logging.StarterLoggerProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -61,6 +62,16 @@ public class ObservabilityAutoConfig {
     @ConditionalOnMissingBean
     public CorrelationIdGenerator correlationIdGenerator() {
         return new UuidCorrelationIdGenerator();
+    }
+
+    /**
+     * Registers a simple SLF4J logger provider bean. Applications may
+     * override this bean to provide alternative logger creation strategies.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public StarterLoggerProvider starterLoggerProvider() {
+        return new StarterLoggerProvider();
     }
 
     /**
