@@ -35,9 +35,9 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USERNAME: guest
       RABBITMQ_PASSWORD: guest
-      NOTIFICATION_QUEUE: notification-service-queue
       NOTIFICATION_EXCHANGE: employee.events
-      NOTIFICATION_ROUTING_KEY: employee.#
+      SERVICES_CLIENT_URL: http://client-service:8083
+      SERVICES_ACCOUNT_URL: http://account-service:8084
       JWT_SECRET: ci-test-secret-that-is-long-enough-for-hmac
     depends_on:
       postgres:

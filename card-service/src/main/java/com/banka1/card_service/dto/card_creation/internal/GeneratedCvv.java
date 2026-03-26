@@ -1,4 +1,4 @@
-package com.banka1.card_service.dto;
+package com.banka1.card_service.dto.card_creation.internal;
 
 /**
  * Pair containing the one-time plain CVV and its hashed representation.

@@ -49,6 +49,26 @@ Each card stores the following fields:
 | `cardLimit` | Spending limit with monetary precision | `5000.00` |
 | `status` | Card lifecycle state | `ACTIVE` |
 
+## Ownership Model
+
+Card ownership is modeled with two separate identifiers:
+
+- `clientId` stores the owner of the linked account
+- `authorizedPersonId` stores the optional business-account person for whom the card was issued
+
+This means the fields are interpreted as follows:
+
+| Scenario | `clientId` | `authorizedPersonId` |
+|---|---|---|
+| Personal card | personal-account owner | `null` |
+| Business card issued to the business owner | business-account owner | `null` |
+| Business card issued to an authorized person | business-account owner | authorized person's ID |
+
+Example:
+
+- if a company owner requests a card for themselves, the card keeps the owner's `clientId` and `authorizedPersonId = null`
+- if the same owner requests a card for a colleague as an authorized person, the card still keeps the owner's `clientId`, while `authorizedPersonId` points to that colleague
+
 ## Supported Brands
 
 The service currently supports these issuer rules:
@@ -178,9 +198,7 @@ Create a `.env` file in `setup/` or in `card-service/` with values such as:
 | `RABBITMQ_PORT` | RabbitMQ port | `5672` |
 | `RABBITMQ_USERNAME` | RabbitMQ username | `rabbit` |
 | `RABBITMQ_PASSWORD` | RabbitMQ password | `rabbit` |
-| `NOTIFICATION_QUEUE` | Notification queue name | `notification-service-queue` |
 | `NOTIFICATION_EXCHANGE` | Notification exchange name | `employee.events` |
-| `NOTIFICATION_ROUTING_KEY` | Notification routing key | `employee.#` |
 
 ## Persistence Notes
 
@@ -201,3 +219,23 @@ Run the module tests with:
 ```
 
 The JaCoCo HTML report is generated in `card-service/build/reports/jacoco/test/html/index.html`.
+
+## Card Notification Flow
+
+Card lifecycle changes publish RabbitMQ events consumed by `notification-service`.
+
+Current flow:
+
+1. `blockCard`, `unblockCard`, or `deactivateCard` persists the new status
+2. `card-service` resolves the notification recipient from `client-service`
+3. `card-service` builds a `CardNotificationDto` payload
+4. the event is published only in `afterCommit`, so rollback does not produce a false email
+5. `notification-service` consumes routing keys `card.blocked`, `card.unblocked`, and `card.deactivated`
+
+Payload notes:
+
+- `username` is the client display name returned by `client-service`
+- `userEmail` is the recipient email returned by `client-service`
+- `templateVariables.cardNumber` contains a masked card number
+- `templateVariables.accountNumber` contains a masked account number
+- `templateVariables.cardName` contains the card display name or fallback `kartica`

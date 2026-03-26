@@ -1,6 +1,6 @@
 package com.banka1.card_service.advice;
 
-import com.banka1.card_service.dto.ErrorResponseDto;
+import com.banka1.card_service.dto.error.ErrorResponseDto;
 import com.banka1.card_service.exception.BusinessException;
 import com.banka1.card_service.exception.ErrorCode;
 import org.springframework.dao.DataIntegrityViolationException;

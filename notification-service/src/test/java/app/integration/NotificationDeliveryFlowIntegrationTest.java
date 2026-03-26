@@ -322,6 +322,173 @@ class NotificationDeliveryFlowIntegrationTest {
     }
 
     /**
+     * Tests the complete happy-path flow for the card-request verification notification.
+     *
+     * <p>Verifies that a {@code card.request_verification} event resolves to
+     * {@code CARD_REQUEST_VERIFICATION} and renders the expected verification email.
+     */
+    @Test
+    void cardRequestVerificationEventPersistsSucceededDeliveryAndSendsVerificationEmail() {
+        NotificationRequest request = new NotificationRequest(
+                "Pera Peric",
+                TEST_EMAIL,
+                Map.of(
+                        "verificationCode", "123456",
+                        "accountNumber", "**************3456",
+                        "cardName", "Visa Debit"
+                )
+        );
+
+        notificationDeliveryService.handleIncomingMessage(request, RoutingKeys.CARD_REQUEST_VERIFICATION);
+
+        NotificationDelivery delivery = waitForSucceededDelivery();
+        SimpleMailMessage sentMessage = recordingMailSender.singleSentMessage();
+
+        assertEquals("CARD_REQUEST_VERIFICATION", delivery.getNotificationType());
+        assertEquals(TEST_EMAIL, delivery.getRecipientEmail());
+        assertEquals("Card Verification Code", delivery.getSubject());
+        assertEquals(
+                "Zdravo Pera Peric, kod za verifikaciju zahteva za karticu Visa Debit na racunu **************3456 je: 123456",
+                delivery.getBody()
+        );
+        assertEquals(NotificationDeliveryStatus.SUCCEEDED, delivery.getStatus());
+        assertEquals(1, delivery.getAttemptCount());
+        assertNotNull(delivery.getSentAt());
+        assertNull(delivery.getNextAttemptAt());
+        assertNull(delivery.getLastError());
+
+        assertArrayEquals(new String[]{TEST_EMAIL}, sentMessage.getTo());
+        assertEquals("Card Verification Code", sentMessage.getSubject());
+        assertEquals(
+                "Zdravo Pera Peric, kod za verifikaciju zahteva za karticu Visa Debit na racunu **************3456 je: 123456",
+                sentMessage.getText()
+        );
+    }
+
+    /**
+     * Tests the complete happy-path flow for the card-blocked notification.
+     *
+     * <p>Verifies that a {@code card.blocked} event resolves to
+     * {@code CARD_BLOCKED} and renders the expected card status email.
+     */
+    @Test
+    void cardBlockedEventPersistsSucceededDeliveryAndSendsBlockedEmail() {
+        NotificationRequest request = new NotificationRequest(
+                "Pera Peric",
+                TEST_EMAIL,
+                Map.of(
+                        "name", "Pera Peric",
+                        "cardName", "Visa Debit",
+                        "accountNumber", "**************3456",
+                        "cardNumber", "1234********5678"
+                )
+        );
+
+        notificationDeliveryService.handleIncomingMessage(request, RoutingKeys.CARD_BLOCKED);
+
+        NotificationDelivery delivery = waitForSucceededDelivery();
+        SimpleMailMessage sentMessage = recordingMailSender.singleSentMessage();
+
+        assertEquals("CARD_BLOCKED", delivery.getNotificationType());
+        assertEquals(TEST_EMAIL, delivery.getRecipientEmail());
+        assertEquals("Card Blocked", delivery.getSubject());
+        assertEquals(
+                "Zdravo Pera Peric, vasa kartica Visa Debit za racun **************3456 sa brojem 1234********5678 je blokirana.",
+                delivery.getBody()
+        );
+        assertEquals(NotificationDeliveryStatus.SUCCEEDED, delivery.getStatus());
+
+        assertArrayEquals(new String[]{TEST_EMAIL}, sentMessage.getTo());
+        assertEquals("Card Blocked", sentMessage.getSubject());
+        assertEquals(
+                "Zdravo Pera Peric, vasa kartica Visa Debit za racun **************3456 sa brojem 1234********5678 je blokirana.",
+                sentMessage.getText()
+        );
+    }
+
+    /**
+     * Tests the complete happy-path flow for the card-unblocked notification.
+     *
+     * <p>Verifies that a {@code card.unblocked} event resolves to
+     * {@code CARD_UNBLOCKED} and renders the expected card status email.
+     */
+    @Test
+    void cardUnblockedEventPersistsSucceededDeliveryAndSendsUnblockedEmail() {
+        NotificationRequest request = new NotificationRequest(
+                "Pera Peric",
+                TEST_EMAIL,
+                Map.of(
+                        "name", "Pera Peric",
+                        "cardName", "Visa Debit",
+                        "accountNumber", "**************3456",
+                        "cardNumber", "1234********5678"
+                )
+        );
+
+        notificationDeliveryService.handleIncomingMessage(request, RoutingKeys.CARD_UNBLOCKED);
+
+        NotificationDelivery delivery = waitForSucceededDelivery();
+        SimpleMailMessage sentMessage = recordingMailSender.singleSentMessage();
+
+        assertEquals("CARD_UNBLOCKED", delivery.getNotificationType());
+        assertEquals(TEST_EMAIL, delivery.getRecipientEmail());
+        assertEquals("Card Unblocked", delivery.getSubject());
+        assertEquals(
+                "Zdravo Pera Peric, vasa kartica Visa Debit za racun **************3456 sa brojem 1234********5678 je ponovo aktivna.",
+                delivery.getBody()
+        );
+        assertEquals(NotificationDeliveryStatus.SUCCEEDED, delivery.getStatus());
+
+        assertArrayEquals(new String[]{TEST_EMAIL}, sentMessage.getTo());
+        assertEquals("Card Unblocked", sentMessage.getSubject());
+        assertEquals(
+                "Zdravo Pera Peric, vasa kartica Visa Debit za racun **************3456 sa brojem 1234********5678 je ponovo aktivna.",
+                sentMessage.getText()
+        );
+    }
+
+    /**
+     * Tests the complete happy-path flow for the card-deactivated notification.
+     *
+     * <p>Verifies that a {@code card.deactivated} event resolves to
+     * {@code CARD_DEACTIVATED} and renders the expected card status email.
+     */
+    @Test
+    void cardDeactivatedEventPersistsSucceededDeliveryAndSendsDeactivatedEmail() {
+        NotificationRequest request = new NotificationRequest(
+                "Pera Peric",
+                TEST_EMAIL,
+                Map.of(
+                        "name", "Pera Peric",
+                        "cardName", "Visa Debit",
+                        "accountNumber", "**************3456",
+                        "cardNumber", "1234********5678"
+                )
+        );
+
+        notificationDeliveryService.handleIncomingMessage(request, RoutingKeys.CARD_DEACTIVATED);
+
+        NotificationDelivery delivery = waitForSucceededDelivery();
+        SimpleMailMessage sentMessage = recordingMailSender.singleSentMessage();
+
+        assertEquals("CARD_DEACTIVATED", delivery.getNotificationType());
+        assertEquals(TEST_EMAIL, delivery.getRecipientEmail());
+        assertEquals("Card Deactivated", delivery.getSubject());
+        assertEquals(
+                "Zdravo Pera Peric, vasa kartica Visa Debit za racun **************3456 sa brojem 1234********5678 je deaktivirana.",
+                delivery.getBody()
+        );
+        assertEquals(NotificationDeliveryStatus.SUCCEEDED, delivery.getStatus());
+
+        assertArrayEquals(new String[]{TEST_EMAIL}, sentMessage.getTo());
+        assertEquals("Card Deactivated", sentMessage.getSubject());
+        assertEquals(
+                "Zdravo Pera Peric, vasa kartica Visa Debit za racun **************3456 sa brojem 1234********5678 je deaktivirana.",
+                sentMessage.getText()
+        );
+    }
+
+    /**
      * Waits until post-commit processing finishes and returns the resulting delivery record.
      *
      * <p>The notification flow sends email only after transaction commit, so assertions cannot

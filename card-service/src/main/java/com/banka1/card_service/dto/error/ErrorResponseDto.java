@@ -1,4 +1,4 @@
-package com.banka1.card_service.dto;
+package com.banka1.card_service.dto.error;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;

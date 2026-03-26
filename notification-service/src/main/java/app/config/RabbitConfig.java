@@ -95,6 +95,25 @@ public class RabbitConfig {
     }
 
     /**
+     * Binds the notification queue to the exchange for card events.
+     *
+     * @param notificationServiceQueue queue bean
+     * @param employeeEventsExchange exchange bean
+     * @param cardRoutingKey routing-key pattern from configuration
+     * @return exchange-to-queue binding for card routing keys
+     */
+    @Bean
+    public Binding cardNotificationBinding(
+            Queue notificationServiceQueue,
+            TopicExchange employeeEventsExchange,
+            @Value("${notification.rabbit.card-routing-key}") String cardRoutingKey
+    ) {
+        return BindingBuilder.bind(notificationServiceQueue)
+                .to(employeeEventsExchange)
+                .with(cardRoutingKey);
+    }
+
+    /**
      * Converts RabbitMQ JSON payloads ==> to/from ==> Java objects.
      *
      * @return Jackson-based message converter

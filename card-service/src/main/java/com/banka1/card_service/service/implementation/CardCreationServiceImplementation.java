@@ -1,11 +1,11 @@
 package com.banka1.card_service.service.implementation;
 
 import com.banka1.card_service.domain.Card;
-import com.banka1.card_service.domain.enums.CardBrand;
 import com.banka1.card_service.domain.enums.CardStatus;
 import com.banka1.card_service.domain.enums.CardType;
-import com.banka1.card_service.dto.CardCreationResult;
-import com.banka1.card_service.dto.GeneratedCvv;
+import com.banka1.card_service.dto.card_creation.internal.CardCreationResult;
+import com.banka1.card_service.dto.card_creation.internal.CreateCardCommand;
+import com.banka1.card_service.dto.card_creation.internal.GeneratedCvv;
 import com.banka1.card_service.exception.BusinessException;
 import com.banka1.card_service.exception.ErrorCode;
 import com.banka1.card_service.repository.CardRepository;
@@ -14,7 +14,6 @@ import com.banka1.card_service.service.CardNumberGenerator;
 import com.banka1.card_service.service.CvvService;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
@@ -28,7 +27,7 @@ import java.time.LocalDate;
  *  - dates,
  *  - and initial status,
  *  and persists the resulting entity.
- *
+
  * Example:
  * for brand {@code VISA} and limit {@code 5000.00}, the created entity will be named
  * {@code "Visa Debit"}, will have status {@code ACTIVE}, and will expire five years after creation.
@@ -69,31 +68,32 @@ public class CardCreationServiceImplementation implements CardCreationService {
     }
 
     /**
-     * Creates and persists a new debit card for the provided account.
-     * The method trims the account number, sets the business creation date to today,
+     * Creates and persists a new debit card from the supplied {@link CreateCardCommand}.
+     * The method trims the command's account number, uses the command's brand for card-number generation
+     * and display naming, persists the provided limit and ownership data, sets the business creation date to today,
      * automatically computes expiration as five years later, and stores only the hashed CVV.
      *
-     * @param accountNumber linked account number that will own the card
-     * @param cardBrand brand used for card-number generation and display naming
-     * @param cardLimit spending limit to persist on the card
+     * @param command internal create-card command with account, brand, limit, client, and optional authorized person
      * @return persisted card together with the one-time plain CVV
      */
     @Override
-    public CardCreationResult createCard(String accountNumber, CardBrand cardBrand, BigDecimal cardLimit) {
-        validateInput(accountNumber, cardLimit);
+    public CardCreationResult createCard(CreateCardCommand command) {
+        validateInput(command);
 
         LocalDate creationDate = LocalDate.now();
         GeneratedCvv generatedCvv = cvvService.generateCvv();
 
         Card card = new Card();
-        card.setCardNumber(cardNumberGenerator.generateCardNumber(cardBrand));
+        card.setCardNumber(cardNumberGenerator.generateCardNumber(command.cardBrand()));
         card.setCardType(CardType.DEBIT);
-        card.setCardName(cardBrand.toCardName());
+        card.setCardName(command.cardBrand().toCardName());
         card.setCreationDate(creationDate);
         card.setExpirationDate(creationDate.plusYears(5));
-        card.setAccountNumber(accountNumber.strip());
+        card.setAccountNumber(command.accountNumber().strip());
+        card.setClientId(command.clientId());
+        card.setAuthorizedPersonId(command.authorizedPersonId());
         card.setCvv(generatedCvv.hashedCvv());
-        card.setCardLimit(cardLimit);
+        card.setCardLimit(command.cardLimit());
         card.setStatus(CardStatus.ACTIVE);
 
         Card savedCard = cardRepository.save(card);
@@ -106,14 +106,19 @@ public class CardCreationServiceImplementation implements CardCreationService {
      * account number must not be blank,
      * and card limit must be present and must not be negative.
      *
-     * @param accountNumber linked account number
-     * @param cardLimit requested card limit
+     * @param command internal create-card command
      */
-    private void validateInput(String accountNumber, BigDecimal cardLimit) {
-        if (accountNumber == null || accountNumber.isBlank()) {
+    private void validateInput(CreateCardCommand command) {
+        if (command.accountNumber() == null || command.accountNumber().isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_ACCOUNT_NUMBER, "Account number must not be blank.");
         }
-        if (cardLimit == null || cardLimit.signum() < 0) {
+        if (command.cardBrand() == null) {
+            throw new BusinessException(ErrorCode.INVALID_CARD_BRAND, "Card brand must be provided.");
+        }
+        if (command.clientId() == null) {
+            throw new BusinessException(ErrorCode.INVALID_CLIENT_ID, "Client ID must be provided.");
+        }
+        if (command.cardLimit() == null || command.cardLimit().signum() < 0) {
             throw new BusinessException(ErrorCode.INVALID_CARD_LIMIT, "Card limit must be zero or greater.");
         }
     }

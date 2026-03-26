@@ -1,7 +1,7 @@
 package com.banka1.card_service.service;
 
-import com.banka1.card_service.dto.CardDetailDTO;
-import com.banka1.card_service.dto.CardSummaryDTO;
+import com.banka1.card_service.dto.card_management.response.CardDetailDTO;
+import com.banka1.card_service.dto.card_management.response.CardSummaryDTO;
 
 import java.math.BigDecimal;
 import java.util.List;

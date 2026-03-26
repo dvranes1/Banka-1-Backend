@@ -2,30 +2,48 @@ package com.banka1.card_service.service.implementation;
 
 import com.banka1.card_service.domain.Card;
 import com.banka1.card_service.domain.enums.CardStatus;
-import com.banka1.card_service.dto.CardDetailDTO;
-import com.banka1.card_service.dto.CardSummaryDTO;
+import com.banka1.card_service.dto.card_management.internal.CardNotificationDto;
+import com.banka1.card_service.dto.card_management.response.CardDetailDTO;
+import com.banka1.card_service.dto.card_management.response.CardSummaryDTO;
+import com.banka1.card_service.dto.enums.CardNotificationType;
 import com.banka1.card_service.exception.BusinessException;
 import com.banka1.card_service.exception.ErrorCode;
 import com.banka1.card_service.rabbitMQ.RabbitClient;
+import com.banka1.card_service.rest_client.AccountNotificationContextDto;
+import com.banka1.card_service.rest_client.AccountService;
+import com.banka1.card_service.rest_client.ClientNotificationRecipientDto;
+import com.banka1.card_service.rest_client.ClientService;
+import com.banka1.card_service.repository.AuthorizedPersonRepository;
 import com.banka1.card_service.repository.CardRepository;
 import com.banka1.card_service.service.CardLifecycleService;
+import com.banka1.card_service.util.SensitiveDataMasker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Default implementation of {@link CardLifecycleService}.
  * All status transitions are validated against the allowed state machine before persisting.
- * A notification is dispatched via {@link RabbitClient} after every successful status change.
+ * A notification is dispatched via RabbitMQ after every successful status change.
  */
 @Service
 @RequiredArgsConstructor
 public class CardLifecycleServiceImpl implements CardLifecycleService {
 
     private final CardRepository cardRepository;
+    private final AuthorizedPersonRepository authorizedPersonRepository;
+    private final AccountService accountService;
+    private final ClientService clientService;
     private final RabbitClient rabbitClient;
 
     /**
@@ -96,8 +114,7 @@ public class CardLifecycleServiceImpl implements CardLifecycleService {
         Card card = findCardOrThrow(cardNumber);
         transitionStatus(card, CardStatus.BLOCKED);
         cardRepository.save(card);
-        // TODO: send email notification — requires client email (resolve from client-service by clientId)
-        // TODO: for business accounts, also notify AuthorizedPerson — requires AuthorizedPerson entity (card creation subissue)
+        registerAfterCommitNotification(card, CardNotificationType.CARD_BLOCKED);
     }
 
     /**
@@ -113,8 +130,7 @@ public class CardLifecycleServiceImpl implements CardLifecycleService {
         Card card = findCardOrThrow(cardNumber);
         transitionStatus(card, CardStatus.ACTIVE);
         cardRepository.save(card);
-        // TODO: send email notification — requires client email (resolve from client-service by clientId)
-        // TODO: for business accounts, also notify AuthorizedPerson — requires AuthorizedPerson entity (card creation subissue)
+        registerAfterCommitNotification(card, CardNotificationType.CARD_UNBLOCKED);
     }
 
     /**
@@ -131,8 +147,7 @@ public class CardLifecycleServiceImpl implements CardLifecycleService {
         Card card = findCardOrThrow(cardNumber);
         transitionStatus(card, CardStatus.DEACTIVATED);
         cardRepository.save(card);
-        // TODO: send email notification — requires client email (resolve from client-service by clientId)
-        // TODO: for business accounts, also notify AuthorizedPerson — requires AuthorizedPerson entity (card creation subissue)
+        registerAfterCommitNotification(card, CardNotificationType.CARD_DEACTIVATED);
     }
 
     /**
@@ -193,5 +208,157 @@ public class CardLifecycleServiceImpl implements CardLifecycleService {
                         ErrorCode.CARD_NOT_FOUND,
                         "Card with number " + cardNumber + " was not found."
                 ));
+    }
+
+    /**
+     * Resolves the notification recipient from {@code client-service}, builds the RabbitMQ payload,
+     * and schedules message publishing strictly after the surrounding transaction commits.
+     *
+     * <p>This avoids sending a notification for a status change that later rolls back.
+     * Recipient lookup is done before {@code afterCommit()} so the callback stays lightweight
+     * and does not depend on an active transactional context.
+     *
+     * @param card card whose lifecycle change triggered the notification
+     * @param notificationType concrete routing-key descriptor for the outgoing event
+     */
+    private void registerAfterCommitNotification(Card card, CardNotificationType notificationType) {
+        List<CardNotificationDto> payloads = resolveNotificationRecipients(card)
+                .stream()
+                .map(recipient -> buildNotificationPayload(card, recipient))
+                .toList();
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                payloads.forEach(payload -> rabbitClient.sendCardNotification(notificationType, payload));
+            }
+        });
+    }
+
+    /**
+     * Resolves all recipients that must receive a card lifecycle notification.
+
+     * 1 notification always goes to the client tied directly to the card
+     * ({@code card.clientId}).
+
+     * For business accounts, a 2. notification goes to the business-account
+     * owner returned by {@code account-service}.
+     * When both IDs point to the same person, only one email is sent.
+     *
+     * @param card card whose lifecycle changed
+     * @return ordered, de-duplicated recipient list
+     */
+    private List<ClientNotificationRecipientDto> resolveNotificationRecipients(Card card) {
+        List<ClientNotificationRecipientDto> recipients = new ArrayList<>();
+        Set<Long> seenClientIds = new HashSet<>();
+        Set<String> seenEmails = new HashSet<>();
+
+        addRecipientIfPresent(recipients, seenClientIds, card.getClientId());
+
+        if (card.getAuthorizedPersonId() != null) {
+            authorizedPersonRepository.findById(card.getAuthorizedPersonId())
+                    .ifPresent(authorizedPerson -> addDirectRecipientIfPresent(
+                            recipients,
+                            seenEmails,
+                            authorizedPerson.getFirstName(),
+                            authorizedPerson.getLastName(),
+                            authorizedPerson.getEmail()
+                    ));
+        } else {
+            AccountNotificationContextDto accountContext = accountService.getNotificationContext(card.getAccountNumber());
+            if (accountContext != null && accountContext.isBusinessAccount()) {
+                addRecipientIfPresent(recipients, seenClientIds, accountContext.ownerClientId());
+            }
+        }
+
+        return recipients;
+    }
+
+    /**
+     * Adds a recipient resolved through {@code client-service} when the client ID is present
+     * and has not already been included in the current notification batch.
+     *
+     * <p>This prevents duplicate notifications when multiple resolution paths point
+     * to the same client.
+     *
+     * @param recipients mutable list of resolved recipients
+     * @param seenClientIds set used for client-ID de-duplication
+     * @param clientId candidate client ID to resolve
+     */
+    private void addRecipientIfPresent(
+            List<ClientNotificationRecipientDto> recipients,
+            Set<Long> seenClientIds,
+            Long clientId
+    ) {
+        if (clientId == null || !seenClientIds.add(clientId)) {
+            return;
+        }
+        recipients.add(clientService.getNotificationRecipient(clientId));
+    }
+
+    /**
+     * Adds a direct email recipient when the address is non-blank and not already present.
+     *
+     * <p>Email de-duplication is case-insensitive and ignores surrounding whitespace,
+     * while the payload keeps the trimmed email address.
+     *
+     * @param recipients mutable list of resolved recipients
+     * @param seenEmails set of normalized email addresses already included
+     * @param firstName recipient first name
+     * @param lastName recipient last name
+     * @param email candidate email address
+     */
+    private void addDirectRecipientIfPresent(
+            List<ClientNotificationRecipientDto> recipients,
+            Set<String> seenEmails,
+            String firstName,
+            String lastName,
+            String email
+    ) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        String normalizedEmail = email.trim().toLowerCase();
+        if (!seenEmails.add(normalizedEmail)) {
+            return;
+        }
+        recipients.add(new ClientNotificationRecipientDto(null, firstName, lastName, email.trim()));
+    }
+
+    /**
+     * Adapts internal card and recipient data to the payload format expected by
+     * {@code notification-service}.
+     *
+     * <p>The payload uses the recipient display name and email returned from
+     * {@code client-service}, while the card-specific values are injected as template variables.
+     *
+     * @param card source card entity
+     * @param recipient resolved notification recipient
+     * @return outbound RabbitMQ payload for the notification consumer
+     */
+    private CardNotificationDto buildNotificationPayload(Card card, ClientNotificationRecipientDto recipient) {
+        return new CardNotificationDto(
+                recipient.displayName(),
+                recipient.email(),
+                templateVariables(card)
+        );
+    }
+
+    /**
+     * Builds the variable map consumed by notification templates for card events.
+     *
+     * <p>Sensitive identifiers are masked before being added to the template model.
+     * The resulting keys are aligned with the placeholders defined in
+     * {@code notification-service} templates.
+     *
+     * @param card source card entity
+     * @return ordered template-variable map
+     */
+    private Map<String, String> templateVariables(Card card) {
+        Map<String, String> variables = new LinkedHashMap<>();
+        variables.put("cardNumber", SensitiveDataMasker.maskCardNumber(card.getCardNumber()));
+        variables.put("accountNumber", SensitiveDataMasker.maskAccountNumber(card.getAccountNumber()));
+        variables.put("cardName", card.getCardName());
+        return variables;
     }
 }

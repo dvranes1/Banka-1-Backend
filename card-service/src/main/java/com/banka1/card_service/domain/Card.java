@@ -33,6 +33,7 @@ import java.time.LocalDate;
         indexes = {
                 @Index(name = "idx_cards_account_number", columnList = "account_number"),
                 @Index(name = "idx_cards_client_id", columnList = "client_id"),
+                @Index(name = "idx_cards_authorized_person_id", columnList = "authorized_person_id"),
                 @Index(name = "idx_cards_status", columnList = "status")
         }
 )
@@ -91,6 +92,13 @@ public class Card extends BaseEntity {
      */
     @Column(name = "client_id", nullable = false)
     private Long clientId;
+
+    /**
+     * Optional ID of the authorized person for whom the card was issued.
+     * Personal cards and business-owner cards keep this field {@code null}.
+     */
+    @Column(name = "authorized_person_id")
+    private Long authorizedPersonId;
 
     /**
      * Hashed CVV value.

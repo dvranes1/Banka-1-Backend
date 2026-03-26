@@ -9,12 +9,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class CardServiceApplication {
 
-	/**
-	 * Starts the Spring Boot application.
-	 *
-	 * @param args command line arguments
-	 */
-	public static void main(String[] args) {
-		SpringApplication.run(CardServiceApplication.class, args);
-	}
+    /**
+     * Starts the Spring Boot application.
+     *
+     * @param args command line arguments
+     */
+    public static void main(String[] args) {
+        SpringApplication.run(CardServiceApplication.class, args);
+    }
 }

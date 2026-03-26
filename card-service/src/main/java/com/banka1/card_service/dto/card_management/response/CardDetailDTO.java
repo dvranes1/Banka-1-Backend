@@ -1,8 +1,9 @@
-package com.banka1.card_service.dto;
+package com.banka1.card_service.dto.card_management.response;
 
 import com.banka1.card_service.domain.Card;
 import com.banka1.card_service.domain.enums.CardStatus;
 import com.banka1.card_service.domain.enums.CardType;
+import com.banka1.card_service.dto.card_creation.internal.CardCreationResult;
 import lombok.Getter;
 
 import java.math.BigDecimal;

@@ -1,15 +1,26 @@
 package com.banka1.card_service.service.implementation;
 
 import com.banka1.card_service.domain.Card;
+import com.banka1.card_service.domain.enums.AccountOwnershipType;
 import com.banka1.card_service.domain.enums.CardStatus;
+import com.banka1.card_service.dto.card_management.internal.CardNotificationDto;
+import com.banka1.card_service.dto.enums.CardNotificationType;
 import com.banka1.card_service.exception.BusinessException;
 import com.banka1.card_service.rabbitMQ.RabbitClient;
+import com.banka1.card_service.repository.AuthorizedPersonRepository;
+import com.banka1.card_service.rest_client.AccountNotificationContextDto;
+import com.banka1.card_service.rest_client.AccountService;
+import com.banka1.card_service.rest_client.ClientNotificationRecipientDto;
+import com.banka1.card_service.rest_client.ClientService;
 import com.banka1.card_service.repository.CardRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,6 +30,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,13 +43,36 @@ class CardLifecycleServiceImplTest {
     private CardRepository cardRepository;
 
     @Mock
+    private AccountService accountService;
+
+    @Mock
+    private AuthorizedPersonRepository authorizedPersonRepository;
+
+    @Mock
+    private ClientService clientService;
+
+    @Mock
     private RabbitClient rabbitClient;
 
     private CardLifecycleServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CardLifecycleServiceImpl(cardRepository, rabbitClient);
+        TransactionSynchronizationManager.initSynchronization();
+        service = new CardLifecycleServiceImpl(
+                cardRepository,
+                authorizedPersonRepository,
+                accountService,
+                clientService,
+                rabbitClient
+        );
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     // --- blockCard ---
@@ -46,11 +82,52 @@ class CardLifecycleServiceImplTest {
         Card card = cardWithStatus(CardStatus.ACTIVE);
         when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
         when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(accountService.getNotificationContext("265000000000123456")).thenReturn(personalAccount());
+        when(clientService.getNotificationRecipient(1L)).thenReturn(recipient());
 
         service.blockCard("1234");
 
         assertEquals(CardStatus.BLOCKED, card.getStatus());
         verify(cardRepository).save(card);
+        verify(rabbitClient, never()).sendCardNotification(any(), any());
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+        verify(rabbitClient).sendCardNotification(eq(CardNotificationType.CARD_BLOCKED), any(CardNotificationDto.class));
+    }
+
+    @Test
+    void blockCard_businessAccount_sendsToAuthorizedPersonAndOwner() {
+        Card card = cardWithStatus(CardStatus.ACTIVE);
+        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(accountService.getNotificationContext("265000000000123456")).thenReturn(businessAccount(2L));
+        when(clientService.getNotificationRecipient(1L)).thenReturn(recipient());
+        when(clientService.getNotificationRecipient(2L)).thenReturn(ownerRecipient());
+
+        service.blockCard("1234");
+
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+
+        verify(clientService).getNotificationRecipient(1L);
+        verify(clientService).getNotificationRecipient(2L);
+        verify(rabbitClient, times(2))
+                .sendCardNotification(eq(CardNotificationType.CARD_BLOCKED), any(CardNotificationDto.class));
+    }
+
+    @Test
+    void blockCard_businessAccountWithSameOwnerAndCardHolder_sendsSingleEmail() {
+        Card card = cardWithStatus(CardStatus.ACTIVE);
+        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(accountService.getNotificationContext("265000000000123456")).thenReturn(businessAccount(1L));
+        when(clientService.getNotificationRecipient(1L)).thenReturn(recipient());
+
+        service.blockCard("1234");
+
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+
+        verify(clientService, times(1)).getNotificationRecipient(1L);
+        verify(rabbitClient, times(1))
+                .sendCardNotification(eq(CardNotificationType.CARD_BLOCKED), any(CardNotificationDto.class));
     }
 
     @Test
@@ -78,11 +155,16 @@ class CardLifecycleServiceImplTest {
         Card card = cardWithStatus(CardStatus.BLOCKED);
         when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
         when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(accountService.getNotificationContext("265000000000123456")).thenReturn(personalAccount());
+        when(clientService.getNotificationRecipient(1L)).thenReturn(recipient());
 
         service.unblockCard("1234");
 
         assertEquals(CardStatus.ACTIVE, card.getStatus());
         verify(cardRepository).save(card);
+        verify(rabbitClient, never()).sendCardNotification(any(), any());
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+        verify(rabbitClient).sendCardNotification(eq(CardNotificationType.CARD_UNBLOCKED), any(CardNotificationDto.class));
     }
 
     @Test
@@ -110,11 +192,16 @@ class CardLifecycleServiceImplTest {
         Card card = cardWithStatus(CardStatus.ACTIVE);
         when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
         when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(accountService.getNotificationContext("265000000000123456")).thenReturn(personalAccount());
+        when(clientService.getNotificationRecipient(1L)).thenReturn(recipient());
 
         service.deactivateCard("1234");
 
         assertEquals(CardStatus.DEACTIVATED, card.getStatus());
         verify(cardRepository).save(card);
+        verify(rabbitClient, never()).sendCardNotification(any(), any());
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+        verify(rabbitClient).sendCardNotification(eq(CardNotificationType.CARD_DEACTIVATED), any(CardNotificationDto.class));
     }
 
     @Test
@@ -122,6 +209,8 @@ class CardLifecycleServiceImplTest {
         Card card = cardWithStatus(CardStatus.BLOCKED);
         when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
         when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(accountService.getNotificationContext("265000000000123456")).thenReturn(personalAccount());
+        when(clientService.getNotificationRecipient(1L)).thenReturn(recipient());
 
         service.deactivateCard("1234");
 
@@ -268,10 +357,27 @@ class CardLifecycleServiceImplTest {
         card.setCardNumber("1234");
         card.setAccountNumber("265000000000123456");
         card.setClientId(1L);
+        card.setCardName("Visa Debit");
         card.setCardLimit(BigDecimal.valueOf(1000));
         card.setCreationDate(LocalDate.now());
         card.setExpirationDate(LocalDate.now().plusYears(5));
         card.setStatus(status);
         return card;
+    }
+
+    private ClientNotificationRecipientDto recipient() {
+        return new ClientNotificationRecipientDto(1L, "Pera", "Peric", "pera@example.com");
+    }
+
+    private ClientNotificationRecipientDto ownerRecipient() {
+        return new ClientNotificationRecipientDto(2L, "Mika", "Mikic", "mika@example.com");
+    }
+
+    private AccountNotificationContextDto personalAccount() {
+        return new AccountNotificationContextDto(AccountOwnershipType.PERSONAL, null);
+    }
+
+    private AccountNotificationContextDto businessAccount(Long ownerClientId) {
+        return new AccountNotificationContextDto(AccountOwnershipType.BUSINESS, ownerClientId);
     }
 }

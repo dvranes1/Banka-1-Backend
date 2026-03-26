@@ -29,6 +29,30 @@ public final class RoutingKeys {
      * Routing key za deaktivaciju naloga klijenta.
      */
     public static final String CLIENT_ACCOUNT_DEACTIVATED = "client.account_deactivated";
+    /**
+     * Routing key za blokiranje kartice.
+     */
+    public static final String CARD_REQUEST_VERIFICATION = "card.request_verification";
+    /**
+     * Routing key za uspesno kreiranje kartice kroz request flow.
+     */
+    public static final String CARD_REQUEST_SUCCESS = "card.request_success";
+    /**
+     * Routing key za neuspesno kreiranje kartice kroz request flow.
+     */
+    public static final String CARD_REQUEST_FAILURE = "card.request_failure";
+    /**
+     * Routing key za blokiranje kartice.
+     */
+    public static final String CARD_BLOCKED = "card.blocked";
+    /**
+     * Routing key za odblokiranje kartice.
+     */
+    public static final String CARD_UNBLOCKED = "card.unblocked";
+    /**
+     * Routing key za trajnu deaktivaciju kartice.
+     */
+    public static final String CARD_DEACTIVATED = "card.deactivated";
 
     private RoutingKeys() {}
 }

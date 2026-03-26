@@ -1,6 +1,7 @@
-package com.banka1.card_service.dto;
+package com.banka1.card_service.dto.card_management.response;
 
 import com.banka1.card_service.domain.Card;
+import com.banka1.card_service.util.SensitiveDataMasker;
 import lombok.Getter;
 
 /**
@@ -18,19 +19,14 @@ public class CardSummaryDTO {
 
     /**
      * Masked card number safe for display in lists.
-     * Format: first 4 digits + asterisks + last 4 digits.
+     * Format: first 4 digits + 8 asterisks + last 4 digits.
      */
     private final String maskedCardNumber;
 
     private final String accountNumber;
 
     public CardSummaryDTO(Card card) {
-        this.maskedCardNumber = maskCardNumber(card.getCardNumber());
+        this.maskedCardNumber = SensitiveDataMasker.maskCardNumber(card.getCardNumber());
         this.accountNumber = card.getAccountNumber();
-    }
-
-    private static String maskCardNumber(String cardNumber) {
-        int len = cardNumber.length();
-        return cardNumber.substring(0, 4) + "*".repeat(len - 8) + cardNumber.substring(len - 4);
     }
 }

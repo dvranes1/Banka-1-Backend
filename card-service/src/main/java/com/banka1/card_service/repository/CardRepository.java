@@ -1,6 +1,7 @@
 package com.banka1.card_service.repository;
 
 import com.banka1.card_service.domain.Card;
+import com.banka1.card_service.domain.enums.CardStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -42,4 +43,32 @@ public interface CardRepository extends JpaRepository<Card, Long> {
      * @return list of cards owned by the client (may be empty)
      */
     List<Card> findByClientId(Long clientId);
+
+    /**
+     * Counts non-terminal owner cards for one account.
+     *
+     * @param accountNumber linked account number
+     * @param clientId owner client ID
+     * @param status terminal status that should be excluded from the count
+     * @return number of matching cards
+     */
+    long countByAccountNumberAndClientIdAndAuthorizedPersonIdIsNullAndStatusNot(
+            String accountNumber,
+            Long clientId,
+            CardStatus status
+    );
+
+    /**
+     * Counts non-terminal authorized-person cards for one account/person pair.
+     *
+     * @param accountNumber linked account number
+     * @param authorizedPersonId authorized-person ID
+     * @param status terminal status that should be excluded from the count
+     * @return number of matching cards
+     */
+    long countByAccountNumberAndAuthorizedPersonIdAndStatusNot(
+            String accountNumber,
+            Long authorizedPersonId,
+            CardStatus status
+    );
 }

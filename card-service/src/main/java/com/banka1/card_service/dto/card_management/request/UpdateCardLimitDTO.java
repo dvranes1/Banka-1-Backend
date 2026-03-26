@@ -1,4 +1,4 @@
-package com.banka1.card_service.dto;
+package com.banka1.card_service.dto.card_management.request;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;

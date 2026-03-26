@@ -4,8 +4,9 @@ import com.banka1.card_service.domain.Card;
 import com.banka1.card_service.domain.enums.CardBrand;
 import com.banka1.card_service.domain.enums.CardStatus;
 import com.banka1.card_service.domain.enums.CardType;
-import com.banka1.card_service.dto.CardCreationResult;
-import com.banka1.card_service.dto.GeneratedCvv;
+import com.banka1.card_service.dto.card_creation.internal.CardCreationResult;
+import com.banka1.card_service.dto.card_creation.internal.CreateCardCommand;
+import com.banka1.card_service.dto.card_creation.internal.GeneratedCvv;
 import com.banka1.card_service.exception.BusinessException;
 import com.banka1.card_service.repository.CardRepository;
 import com.banka1.card_service.service.CardNumberGenerator;
@@ -52,9 +53,13 @@ class CardCreationServiceImplementationTest {
         when(cardRepository.save(any(Card.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CardCreationResult result = cardCreationService.createCard(
-                " 123-456-789 ",
-                CardBrand.VISA,
-                new BigDecimal("5000.00")
+                new CreateCardCommand(
+                        " 123-456-789 ",
+                        CardBrand.VISA,
+                        new BigDecimal("5000.00"),
+                        77L,
+                        null
+                )
         );
 
         ArgumentCaptor<Card> cardCaptor = ArgumentCaptor.forClass(Card.class);
@@ -66,6 +71,7 @@ class CardCreationServiceImplementationTest {
         assertEquals("Visa Debit", savedCard.getCardName());
         assertEquals(savedCard.getCreationDate().plusYears(5), savedCard.getExpirationDate());
         assertEquals("123-456-789", savedCard.getAccountNumber());
+        assertEquals(77L, savedCard.getClientId());
         assertEquals("hashed-cvv", savedCard.getCvv());
         assertEquals(new BigDecimal("5000.00"), savedCard.getCardLimit());
         assertEquals(CardStatus.ACTIVE, savedCard.getStatus());
@@ -77,7 +83,9 @@ class CardCreationServiceImplementationTest {
     void createCardRejectsBlankAccountNumber() {
         assertThrows(
                 BusinessException.class,
-                () -> cardCreationService.createCard("  ", CardBrand.VISA, new BigDecimal("1.00"))
+                () -> cardCreationService.createCard(
+                        new CreateCardCommand("  ", CardBrand.VISA, new BigDecimal("1.00"), 1L, null)
+                )
         );
     }
 
@@ -85,7 +93,9 @@ class CardCreationServiceImplementationTest {
     void createCardRejectsNegativeCardLimit() {
         assertThrows(
                 BusinessException.class,
-                () -> cardCreationService.createCard("123", CardBrand.VISA, new BigDecimal("-1.00"))
+                () -> cardCreationService.createCard(
+                        new CreateCardCommand("123", CardBrand.VISA, new BigDecimal("-1.00"), 1L, null)
+                )
         );
     }
 }

@@ -14,48 +14,44 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Spring configuration for RabbitMQ infrastructure.
- * Declares the queue, topic exchange, binding, and JSON converter used to publish
- * card-related notification events to the notification service.
- *
- * All connection parameters and resource names are resolved from environment
- * variables via {@code application.properties} so that no credentials are hardcoded.
+ * Spring konfiguracija RabbitMQ infrastrukture.
+ * Definise queue, topic exchange, binding i JSON konverter za serijalizaciju poruka.
  */
 @Configuration
 public class RabbitConfig {
 
-    /** Name of the RabbitMQ queue that receives notification messages. */
+    /** Naziv RabbitMQ queue-a na koji stizu card notifikacije. */
     @Value("${rabbitmq.queue}")
     private String queueName;
 
-    /** Name of the topic exchange to which messages are published. */
+    /** Naziv topic exchange-a na koji se poruke objavljuju. */
     @Value("${rabbitmq.exchange}")
     private String exchangeName;
 
-    /** Routing key that binds the exchange to the queue. */
+    /** Routing kljuc koji vezuje exchange za queue. */
     @Value("${rabbitmq.routing-key}")
     private String routingKey;
 
-    /** Hostname of the RabbitMQ server. */
+    /** Hostname RabbitMQ servera. */
     @Value("${spring.rabbitmq.host}")
     private String rabbitHost;
 
-    /** Port of the RabbitMQ server. */
+    /** Port RabbitMQ servera. */
     @Value("${spring.rabbitmq.port}")
     private int rabbitPort;
 
-    /** Username for authenticating with the RabbitMQ server. */
+    /** Korisnicko ime za autentifikaciju na RabbitMQ serveru. */
     @Value("${spring.rabbitmq.username}")
     private String rabbitUsername;
 
-    /** Password for authenticating with the RabbitMQ server. */
+    /** Lozinka za autentifikaciju na RabbitMQ serveru. */
     @Value("${spring.rabbitmq.password}")
     private String rabbitPassword;
 
     /**
-     * Creates the RabbitMQ connection factory using the configured host and credentials.
+     * Kreira RabbitMQ connection factory na osnovu vrednosti iz konfiguracije.
      *
-     * @return configured connection factory
+     * @return konekcioni factory za komunikaciju sa RabbitMQ serverom
      */
     @Bean
     public ConnectionFactory connectionFactory() {
@@ -67,12 +63,11 @@ public class RabbitConfig {
     }
 
     /**
-     * Creates the {@link RabbitTemplate} with the JSON message converter wired in,
-     * so that all outbound messages are serialized as JSON.
+     * Kreira RabbitTemplate i povezuje JSON konverter poruka.
      *
-     * @param connectionFactory AMQP connection factory
-     * @param jacksonMessageConverter JSON message converter
-     * @return configured RabbitMQ template
+     * @param connectionFactory factory za otvaranje RabbitMQ konekcija
+     * @param jacksonMessageConverter konverter objekata u JSON poruke
+     * @return konfigurisan RabbitTemplate
      */
     @Bean
     public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, MessageConverter jacksonMessageConverter) {
@@ -82,8 +77,7 @@ public class RabbitConfig {
     }
 
     /**
-     * Registers a Jackson-based message converter so that messages are serialized as JSON,
-     * matching the format expected by the notification service.
+     * Registruje Jackson konverter za serijalizaciju RabbitMQ poruka u JSON format.
      *
      * @return JSON message converter
      */
@@ -93,10 +87,9 @@ public class RabbitConfig {
     }
 
     /**
-     * Declares a durable notification queue.
-     * Durable queues survive broker restarts, preventing message loss.
+     * Kreira trajni RabbitMQ queue sa konfigurisanim nazivom.
      *
-     * @return durable notification queue
+     * @return deklarisani durable queue
      */
     @Bean
     public Queue queue() {
@@ -104,9 +97,9 @@ public class RabbitConfig {
     }
 
     /**
-     * Declares the topic exchange used for routing notification messages.
+     * Kreira topic exchange za rutiranje notifikacija.
      *
-     * @return topic exchange
+     * @return deklarisani topic exchange
      */
     @Bean
     public TopicExchange topicExchange() {
@@ -114,11 +107,11 @@ public class RabbitConfig {
     }
 
     /**
-     * Binds the notification queue to the topic exchange with the configured routing key.
+     * Povezuje queue i exchange preko konfigurisanog routing kljuca.
      *
-     * @param queue notification queue
-     * @param topicExchange topic exchange
-     * @return queue-to-exchange binding
+     * @param queue queue koji prima poruke
+     * @param topicExchange exchange preko kog se poruke rutiraju
+     * @return deklarisani binding
      */
     @Bean
     public Binding binding(Queue queue, TopicExchange topicExchange) {

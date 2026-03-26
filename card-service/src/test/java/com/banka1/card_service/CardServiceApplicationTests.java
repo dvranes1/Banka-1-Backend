@@ -11,10 +11,10 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class CardServiceApplicationTests {
 
-	/**
-	 * Verifies that the application context starts successfully.
-	 */
-	@Test
-	void contextLoads() {
-	}
+    /**
+     * Verifies that the application context starts successfully.
+     */
+    @Test
+    void contextLoads() {
+    }
 }

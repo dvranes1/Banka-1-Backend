@@ -1,10 +1,11 @@
-package com.banka1.card_service.dto;
+package com.banka1.card_service.dto.card_creation.internal;
 
 import com.banka1.card_service.domain.Card;
 
 /**
- * Result returned after a new card is created.
- * This DTO intentionally contains both the persisted {@link Card} entity
+ * Internal result returned after a new card is created.
+ *
+ * This intentionally contains both the persisted {@link Card} entity
  * and the ONE-TIME plain CVV that can be shown to the caller immediately after creation.
  *
  * Example:

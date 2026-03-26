@@ -57,6 +57,8 @@ public class CardNumberGenerator {
 
     /**
      * Generates a unique card number for the requested brand.
+     * EXAMPLE:
+     *  - we have a VISA card -----> the function will generate a VISA card number (VISA specific rules)
      * The method chooses a valid brand prefix, generates the random middle section,
      * calculates the Luhn digit, and checks whether the resulting number is already persisted.
      *

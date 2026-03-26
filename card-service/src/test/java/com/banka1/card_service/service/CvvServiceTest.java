@@ -1,6 +1,6 @@
 package com.banka1.card_service.service;
 
-import com.banka1.card_service.dto.GeneratedCvv;
+import com.banka1.card_service.dto.card_creation.internal.GeneratedCvv;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 

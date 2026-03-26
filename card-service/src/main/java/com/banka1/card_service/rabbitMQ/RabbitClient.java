@@ -1,5 +1,7 @@
 package com.banka1.card_service.rabbitMQ;
 
+import com.banka1.card_service.dto.card_management.internal.CardNotificationDto;
+import com.banka1.card_service.dto.enums.CardNotificationType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,9 +12,6 @@ import org.springframework.stereotype.Component;
  * Encapsulates {@link RabbitTemplate} and the configured exchange name,
  * so that services do not depend on RabbitMQ infrastructure directly.
  *
- * Note: email notification sending requires {@code clientId} on the Card entity
- * to resolve the recipient email address. This will be wired up once the card
- * creation subissue is complete.
  */
 @Component
 @RequiredArgsConstructor
@@ -28,11 +27,10 @@ public class RabbitClient {
     /**
      * Publishes a card notification event to the configured exchange.
      *
-     * @param routingKey routing key that determines which queue receives the message
+     * @param notificationType typed routing key descriptor
      * @param payload message payload to publish
      */
-    // TODO: uncomment and implement once clientId is available on Card entity (card creation subissue)
-    // public void sendCardNotification(String routingKey, Object payload) {
-    //     rabbitTemplate.convertAndSend(exchange, routingKey, payload);
-    // }
+    public void sendCardNotification(CardNotificationType notificationType, CardNotificationDto payload) {
+        rabbitTemplate.convertAndSend(exchange, notificationType.getRoutingKey(), payload);
+    }
 }
