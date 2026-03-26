@@ -1,6 +1,7 @@
 package com.banka1.card_service.rest_client;
 
 import com.banka1.card_service.domain.enums.AccountOwnershipType;
+import com.banka1.card_service.dto.card_creation.internal.InternalAccountDetailsDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
