@@ -58,9 +58,9 @@ public interface AccountRepository extends JpaRepository<Account,Long> {
 
     @Query("""
     SELECT a FROM Account a
-    WHERE (:brojRacuna IS NULL OR LOWER(a.brojRacuna) LIKE LOWER(CONCAT('%', :brojRacuna, '%')))
-    AND (:ime IS NULL OR LOWER(a.imeVlasnikaRacuna) LIKE LOWER(CONCAT('%', :ime, '%')))
-    AND (:prezime IS NULL OR LOWER(a.prezimeVlasnikaRacuna) LIKE LOWER(CONCAT('%', :prezime, '%')))
+    WHERE LOWER(a.brojRacuna) LIKE LOWER(CONCAT('%', COALESCE(:brojRacuna, ''), '%'))
+    AND LOWER(a.imeVlasnikaRacuna) LIKE LOWER(CONCAT('%', COALESCE(:ime, ''), '%'))
+    AND LOWER(a.prezimeVlasnikaRacuna) LIKE LOWER(CONCAT('%', COALESCE(:prezime, ''), '%'))
     ORDER BY a.prezimeVlasnikaRacuna ASC, a.imeVlasnikaRacuna ASC
 """)
     Page<Account> searchAccounts(
