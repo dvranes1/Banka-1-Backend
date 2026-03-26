@@ -247,6 +247,24 @@ class EmployeeServiceImplementationTest {
     }
 
     @Test
+    void searchAllAccountsHandlesCheckingAccountWithNullConcrete() {
+        CheckingAccount legacyChecking = new CheckingAccount();
+        legacyChecking.setBrojRacuna("111000110000000099");
+        legacyChecking.setImeVlasnikaRacuna("Mateja");
+        legacyChecking.setPrezimeVlasnikaRacuna("Matic");
+
+        when(accountRepository.searchAccounts(eq(null), eq("Mateja"), eq(null), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(legacyChecking)));
+
+        Page<AccountSearchResponseDto> page =
+                service.searchAllAccounts(jwt(1L), "Mateja", null, null, 0, 10);
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getContent().get(0).getTekuciIliDevizni()).isEqualTo("tekuci");
+        assertThat(page.getContent().get(0).getAccountOwnershipType()).isEqualTo(AccountOwnershipType.PERSONAL);
+    }
+
+    @Test
     void getBankAccountsReturnsList() {
         CheckingAccount bank = bankRsdAccount("111000110000000099");
         when(accountRepository.findAllBankAccounts()).thenReturn(List.of(bank));

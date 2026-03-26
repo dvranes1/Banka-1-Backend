@@ -26,7 +26,14 @@ public class AccountSearchResponseDto {
         this.prezime = account.getPrezimeVlasnikaRacuna();
         if (account instanceof CheckingAccount ca) {
             tekuciIliDevizni = "tekuci";
-            accountOwnershipType = ca.getAccountConcrete().getAccountOwnershipType();
+            if (ca.getAccountConcrete() != null) {
+                accountOwnershipType = ca.getAccountConcrete().getAccountOwnershipType();
+            } else {
+                // Fallback for legacy rows where account_concrete is unexpectedly null.
+                accountOwnershipType = ca.getCompany() == null
+                        ? AccountOwnershipType.PERSONAL
+                        : AccountOwnershipType.BUSINESS;
+            }
         } else if (account instanceof FxAccount fa) {
             tekuciIliDevizni = "devizni";
             accountOwnershipType = fa.getAccountOwnershipType();
