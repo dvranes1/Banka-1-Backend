@@ -530,6 +530,7 @@ services:
       EXCHANGE_SERVICE_HOST: exchange-service
       EXCHANGE_SERVER_PORT: ${EXCHANGE_SERVER_PORT:-8085}
       VERIFICATION_SERVICE_HOST: verification-service
+      SERVICES_VERIFICATION_URL: http://verification-service:${VERIFICATION_SERVER_PORT:-8086}
       VERIFICATION_SERVER_PORT: ${VERIFICATION_SERVER_PORT:-8086}
       MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
