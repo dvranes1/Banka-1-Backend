@@ -6,6 +6,7 @@ import com.banka1.transaction_service.domain.enums.TransactionStatus;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -63,11 +64,11 @@ public class Payment extends BaseEntityWithoutDelete {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TransactionStatus status=TransactionStatus.IN_PROGRESS;
-    @NotBlank
+    @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private CurrencyCode fromCurrency;
-    @NotBlank
+    @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private CurrencyCode toCurrency;
