@@ -17,6 +17,10 @@ public class StockListingDto {
     private String name;
     /** Last traded price. */
     private BigDecimal price;
+    /** Ask price. */
+    private BigDecimal ask;
+    /** Bid price. */
+    private BigDecimal bid;
     /** Currency code of the listing's exchange. */
     private String currency;
     /** Identifier of the exchange this listing belongs to. */

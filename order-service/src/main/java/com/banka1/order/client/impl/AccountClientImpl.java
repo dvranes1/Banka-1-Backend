@@ -2,6 +2,7 @@ package com.banka1.order.client.impl;
 
 import com.banka1.order.client.AccountClient;
 import com.banka1.order.dto.AccountDetailsDto;
+import com.banka1.order.dto.AccountTransactionRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
@@ -29,5 +30,28 @@ public class AccountClientImpl implements AccountClient {
                 .uri("/internal/accounts/{accountNumber}/details", accountNumber)
                 .retrieve()
                 .body(AccountDetailsDto.class);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public AccountDetailsDto getAccountDetails(Long accountId) {
+        return accountRestClient.get()
+                .uri("/internal/accounts/{accountId}/details", accountId)
+                .retrieve()
+                .body(AccountDetailsDto.class);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void transfer(AccountTransactionRequest request) {
+        accountRestClient.post()
+                .uri("/internal/accounts/transaction")
+                .body(request)
+                .retrieve()
+                .toBodilessEntity();
     }
 }

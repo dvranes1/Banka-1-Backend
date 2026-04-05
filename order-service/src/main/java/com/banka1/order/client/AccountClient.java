@@ -1,6 +1,7 @@
 package com.banka1.order.client;
 
 import com.banka1.order.dto.AccountDetailsDto;
+import com.banka1.order.dto.AccountTransactionRequest;
 
 /**
  * Client interface for communicating with the account-service.
@@ -15,4 +16,19 @@ public interface AccountClient {
      * @return account details including balance and currency
      */
     AccountDetailsDto getAccountDetails(String accountNumber);
+
+    /**
+     * Fetches details of a bank account by its ID.
+     *
+     * @param accountId the account ID to look up
+     * @return account details including balance and currency
+     */
+    AccountDetailsDto getAccountDetails(Long accountId);
+
+    /**
+     * Performs a transaction between accounts.
+     *
+     * @param request the transaction request
+     */
+    void transfer(AccountTransactionRequest request);
 }
