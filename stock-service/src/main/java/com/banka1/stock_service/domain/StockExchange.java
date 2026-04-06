@@ -6,7 +6,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -45,7 +44,7 @@ public class StockExchange {
     /**
      * Unique MIC code of the exchange.
      */
-    @Column(name = "exchange_mic_code", nullable = false, unique = true, length = 20)
+    @Column(name = "exchange_mic_code", nullable = false, length = 20)
     private String exchangeMICCode;
 
     /**

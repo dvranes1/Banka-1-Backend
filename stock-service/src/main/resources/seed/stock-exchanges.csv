@@ -1,0 +1,11 @@
+Exchange Name,Acronym,MIC Code,Polity,Currency,Time Zone,Open Time,Close Time,Pre Market Open Time,Pre Market Close Time,Post Market Open Time,Post Market Close Time,Is Active
+New York Stock Exchange,NYSE,XNYS,United States,USD,America/New_York,09:30,16:00,07:00,09:30,16:00,20:00,true
+NASDAQ Stock Market,NASDAQ,XNAS,United States,USD,America/New_York,09:30,16:00,04:00,09:30,16:00,20:00,true
+London Stock Exchange,LSE,XLON,United Kingdom,GBP,Europe/London,08:00,16:30,,,,,true
+Deutsche Boerse Xetra,XETRA,XETR,Germany,EUR,Europe/Berlin,09:00,17:30,,,,,true
+Euronext Paris,ENXPAR,XPAR,France,EUR,Europe/Paris,09:00,17:30,,,,,true
+Tokyo Stock Exchange,TSE,XTKS,Japan,JPY,Asia/Tokyo,09:00,15:00,,,,,true
+Hong Kong Stock Exchange,HKEX,XHKG,Hong Kong,HKD,Asia/Hong_Kong,09:30,16:00,,,,,true
+Toronto Stock Exchange,TSX,XTSE,Canada,CAD,America/Toronto,09:30,16:00,,,,,true
+Australian Securities Exchange,ASX,XASX,Australia,AUD,Australia/Sydney,10:00,16:00,,,,,true
+Borsa Italiana,BIT,MTAA,Italy,EUR,Europe/Rome,09:00,17:30,,,,,false
