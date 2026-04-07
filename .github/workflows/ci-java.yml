@@ -376,7 +376,7 @@ jobs:
     name: Push to GHCR (${{ matrix.service }})
     needs: [ detect-changes, docker-validate ]
     if: |
-      github.event_name == 'push' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       needs.detect-changes.outputs.services != '[]' &&
       needs.detect-changes.outputs.services != ''
     runs-on: ubuntu-latest
