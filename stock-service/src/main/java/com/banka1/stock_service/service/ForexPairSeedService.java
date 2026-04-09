@@ -102,6 +102,11 @@ public class ForexPairSeedService {
         );
     }
 
+    /**
+     * Loads all persisted exchanges indexed by MIC code.
+     *
+     * @return MIC-indexed stock exchanges
+     */
     private Map<String, StockExchange> loadStockExchangesByMic() {
         return stockExchangeRepository.findAllByOrderByExchangeNameAsc()
                 .stream()
@@ -112,6 +117,17 @@ public class ForexPairSeedService {
                 );
     }
 
+    /**
+     * Resolves the exchange assigned to generated FX listings.
+     *
+     * <p>The current model stores every listing on one exchange, so the seeder prefers
+     * {@code XNAS} when present and otherwise falls back to the first available exchange.
+     * This is compatibility metadata required by the current schema, not a signal that should
+     * drive FX market-open checks or scheduler refresh decisions.
+     *
+     * @param exchangesByMic MIC-indexed stock exchanges
+     * @return resolved exchange for FX listings
+     */
     private StockExchange resolveForexExchange(Map<String, StockExchange> exchangesByMic) {
         if (exchangesByMic.isEmpty()) {
             throw new IllegalStateException(
@@ -121,6 +137,13 @@ public class ForexPairSeedService {
         return exchangesByMic.getOrDefault(DEFAULT_FOREX_EXCHANGE_MIC, exchangesByMic.values().iterator().next());
     }
 
+    /**
+     * Creates a new FX pair with seed data.
+     *
+     * @param baseCurrency base currency code
+     * @param quoteCurrency quote currency code
+     * @return newly created FX pair with placeholder exchange rate
+     */
     private ForexPair createForexPair(String baseCurrency, String quoteCurrency) {
         ForexPair forexPair = new ForexPair();
         forexPair.setTicker(buildTicker(baseCurrency, quoteCurrency));
@@ -131,6 +154,13 @@ public class ForexPairSeedService {
         return forexPair;
     }
 
+    /**
+     * Creates a new FX listing with seed data.
+     *
+     * @param forexPair linked FX pair
+     * @param stockExchange exchange assigned to the listing
+     * @return newly created listing with placeholder market data
+     */
     private Listing createListing(ForexPair forexPair, StockExchange stockExchange) {
         Listing listing = new Listing();
         listing.setSecurityId(forexPair.getId());
@@ -147,14 +177,36 @@ public class ForexPairSeedService {
         return listing;
     }
 
+    /**
+     * Resolves the seed volume for a FX listing based on the pair's exchange rate.
+     *
+     * <p>Returns zero volume if the exchange rate is zero, otherwise returns the standard contract size.
+     *
+     * @param forexPair FX pair to resolve volume for
+     * @return seed volume for the listing
+     */
     private long resolveSeedVolume(ForexPair forexPair) {
         return forexPair.getExchangeRate().signum() == 0 ? ZERO_VOLUME : forexPair.getContractSize();
     }
 
+    /**
+     * Formats the stable ticker for one ordered pair.
+     *
+     * @param baseCurrency base currency code
+     * @param quoteCurrency quote currency code
+     * @return ticker in {@code BASE/QUOTE} format
+     */
     private String buildTicker(String baseCurrency, String quoteCurrency) {
         return baseCurrency + "/" + quoteCurrency;
     }
 
+    /**
+     * Formats a display name for the generated listing.
+     *
+     * @param baseCurrency base currency code
+     * @param quoteCurrency quote currency code
+     * @return human-readable pair name
+     */
     private String buildListingName(String baseCurrency, String quoteCurrency) {
         return baseCurrency + " / " + quoteCurrency;
     }

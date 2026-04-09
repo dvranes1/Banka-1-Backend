@@ -10,8 +10,24 @@ import java.time.LocalDateTime;
 
 /**
  * Records a single executed portion of an order.
- * Orders are filled incrementally — each partial fill produces one Transaction.
- * For All-or-None orders, there is exactly one transaction per order.
+ *
+ * When an order is executed, it may be filled incrementally (partial fills) or
+ * all at once. Each partial execution is recorded as a separate Transaction entity.
+ *
+ * For example:
+ * <ul>
+ *   <li>Market orders: typically 1 transaction per order</li>
+ *   <li>Limit orders: may have multiple transactions as price conditions are met</li>
+ *   <li>All-or-None orders: exactly 1 transaction (full fill) or none</li>
+ * </ul>
+ *
+ * Transactions are used for:
+ * <ul>
+ *   <li>Portfolio position updates</li>
+ *   <li>Tax calculation (matched with cost basis)</li>
+ *   <li>Commission and fee tracking</li>
+ *   <li>Audit trail of executed trades</li>
+ * </ul>
  */
 @Entity
 @Table(name = "transactions")
@@ -20,35 +36,39 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class Transaction {
 
+    /** Unique transaction identifier. */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Reference to the parent order. */
+    /** Reference to the parent order this transaction fulfills. */
     @Column(nullable = false)
     private Long orderId;
 
-    /** Number of units filled in this portion. */
+    /** Number of units filled in this execution portion. */
     @Column(nullable = false)
     private Integer quantity;
 
-    /** Price per unit at the time of execution. */
+    /** Execution price per unit at the time this portion was filled. */
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal pricePerUnit;
 
-    /** Total value of this portion: {@code quantity * pricePerUnit}. */
+    /** Total value of this execution: {@code quantity * pricePerUnit}. In the security's native currency. */
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal totalPrice;
 
-    /** Commission charged for this portion, transferred to the bank's account. */
+    /** Commission/fee charged for this execution. Deducted from settlement amount and transferred to bank. */
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal commission;
 
-    /** Timestamp when this portion was executed. Set automatically on first persist. */
+    /** Timestamp when this execution was recorded. Set automatically on creation. */
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
-    /** Sets the execution timestamp to now if not already assigned. */
+    /**
+     * JPA callback that sets the execution timestamp to the current time.
+     * Called before the first persist operation if timestamp is not already assigned.
+     */
     @PrePersist
     public void setTimestamp() {
         if (this.timestamp == null) {

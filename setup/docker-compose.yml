@@ -310,7 +310,7 @@ services:
       NOTIFICATION_QUEUE: ${NOTIFICATION_QUEUE}
       NOTIFICATION_EXCHANGE: ${NOTIFICATION_EXCHANGE}
       NOTIFICATION_ROUTING_KEY: ${NOTIFICATION_ROUTING_KEY}
-      SERVICES_VERIFICATION_URL: ${SERVICES_VERIFICATION_URL}
+      SERVICES_VERIFICATION_URL: http://verification-service:${VERIFICATION_SERVER_PORT:-8086}
       SERVICE_VERIFICATION_PORT: ${SERVICE_VERIFICATION_PORT}
       MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
@@ -523,7 +523,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       SERVICES_USER_URL: ${SERVICES_USER_URL}
       CLIENT_SERVER_PORT: ${CLIENT_SERVER_PORT}
-      SERVICES_VERIFICATION_URL: ${SERVICES_VERIFICATION_URL}
+      SERVICES_VERIFICATION_URL: http://verification-service:${VERIFICATION_SERVER_PORT:-8086}
       SERVICE_VERIFICATION_PORT: ${SERVICE_VERIFICATION_PORT}
       SERVICES_EXCHANGE_URL: ${SERVICES_EXCHANGE_URL}
       SERVICE_EXCHANGE_PORT: ${EXCHANGE_SERVER_PORT}
@@ -686,6 +686,72 @@ services:
       retries: 10
       start_period: 30s
 
+  # Credit Service
+  credit-service:
+    build:
+      context: ..
+      dockerfile: credit-service/Dockerfile
+      args:
+        SERVER_PORT: ${CREDIT_SERVER_PORT:-8089}
+    container_name: banka_credit_service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CREDIT_SERVER_PORT: ${CREDIT_SERVER_PORT:-8089}
+      SERVER_PORT: ${CREDIT_SERVER_PORT:-8089}
+      CREDIT_DB_HOST: postgres
+      CREDIT_DB_PORT: 5432
+      CREDIT_DB_NAME: ${CREDIT_DB_NAME:-credit_db}
+      CREDIT_DB_USER: ${CREDIT_DB_USER:-postgres}
+      CREDIT_DB_PASSWORD: ${CREDIT_DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICES_USER_URL: ${SERVICES_USER_URL}
+      CLIENT_SERVER_PORT: ${CLIENT_SERVER_PORT:-8083}
+      SERVICES_CARD_URL: ${SERVICES_CARD_URL:-http://card-service:8090}
+      SERVICES_VERIFICATION_URL: http://verification-service:${VERIFICATION_SERVER_PORT:-8086}
+      SKIP_VERIFICATION: ${SKIP_VERIFICATION:-false}
+      SERVICES_EXCHANGE_URL: ${SERVICES_EXCHANGE_URL}
+      SERVICES_ACCOUNT_URL: ${SERVICES_ACCOUNT_URL}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      NOTIFICATION_QUEUE: ${NOTIFICATION_QUEUE:-notification-service-queue}
+      NOTIFICATION_EXCHANGE: ${NOTIFICATION_EXCHANGE:-employee.events}
+      NOTIFICATION_ROUTING_KEY: ${NOTIFICATION_ROUTING_KEY:-employee.#}
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://otel-collector:4318/v1/metrics
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_SERVICE_NAME: credit-service
+      LOGGING_FILE_PATH: /var/log/banka
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
+      verification-service:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    expose:
+      - "${CREDIT_SERVER_PORT:-8089}"
+    networks:
+      - banka-network
+    volumes:
+      - credit-service-logs:/var/log/banka
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${CREDIT_SERVER_PORT:-8089}/actuator/health/liveness || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   # Order Service
   order-service:
     build:
@@ -816,5 +882,6 @@ volumes:
   verification-service-logs:
   transaction-service-logs:
   order-service-logs:
+  credit-service-logs:
   stock-service-logs:
 

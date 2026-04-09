@@ -16,6 +16,7 @@ on:
       - 'verification-service/**'
       - 'exchange-service/**'
       - 'stock-service/**'
+      - 'credit-service/**'
   pull_request:
     branches: [main, dev]
     paths:
@@ -28,6 +29,7 @@ on:
       - 'verification-service/**'
       - 'exchange-service/**'
       - 'stock-service/**'
+      - 'credit-service/**'
 
 jobs:
 
@@ -63,6 +65,8 @@ jobs:
               - 'exchange-service/**'
             stock-service:
               - 'stock-service/**'
+            credit-service:
+              - 'credit-service/**'
 
   # ── Build & Test ──────────────────────────────────────────────────────────
   build-and-test:

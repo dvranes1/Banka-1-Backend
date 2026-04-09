@@ -38,6 +38,45 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Implementation of OrderExecutionService.
+ *
+ * Handles the execution of approved/pending orders when market conditions are met.
+ * Processes orders asynchronously with retry logic for partial executions.
+ *
+ * Key Responsibilities:
+ * <ul>
+ *   <li>Execute orders when market conditions match order parameters</li>
+ *   <li>Evaluate order conditions (MARKET, LIMIT, STOP, STOP_LIMIT)</li>
+ *   <li>Process partial and full fills</li>
+ *   <li>Update portfolio positions on successful execution</li>
+ *   <li>Create transaction records for executed trades</li>
+ *   <li>Calculate and deduct trading fees</li>
+ *   <li>Update order status and remaining portions</li>
+ *   <li>Release or consume reserved limits</li>
+ *   <li>Schedule async executions with retry logic</li>
+ * </ul>
+ *
+ * Execution Logic:
+ * <ol>
+ *   <li>Validate order is in APPROVED or PENDING_EXECUTION status</li>
+ *   <li>Fetch current market data for the listing</li>
+ *   <li>Evaluate if order conditions are met (price targets, order type)</li>
+ *   <li>Determine fill quantity based on market conditions</li>
+ *   <li>Verify account has sufficient balance/margin (buy) or portfolio quantity (sell)</li>
+ *   <li>Calculate execution price and fee</li>
+ *   <li>Process settlement (debit/credit account)</li>
+ *   <li>Update portfolio positions</li>
+ *   <li>Create transaction record</li>
+ *   <li>Update order status (PARTIALLY_FILLED or EXECUTED)</li>
+ *   <li>Schedule retry if partially filled</li>
+ * </ol>
+ *
+ * Service Integrations:
+ * <ul>
+ *   <li>stock-service: Get current market prices and order execution data</li>
+ *   <li>account-service: Settlement and balance verification</li>
+ *   <li>employee-service: Get employee and actuary data</li>
+ *   <li>exchange-service: Currency conversion for foreign trades</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor

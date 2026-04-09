@@ -46,7 +46,7 @@ public class TransferController {
 
     /**
      * Dobavlja paginiranu istoriju svih transfera za specifičnog klijenta.
-     * Pristup je dozvoljen samo vlasniku podataka ili zaposlenom (ROLE_AGENT/ADMIN).
+     * Pristup je dozvoljen samo vlasniku podataka ili zaposlenom (AGENT/ADMIN).
      * @param jwt token ulogovanog korisnika za proveru ovlašćenja
      * @param clientId ID klijenta čija se istorija potražuje
      * @param page broj stranice (offset)
@@ -64,7 +64,7 @@ public class TransferController {
 
         // Da li klijent traži svoje transfere, ili je zaposleni?
         Long loggedInId = Long.parseLong(jwt.getClaimAsString("id"));
-        boolean isEmployee = jwt.getClaimAsStringList("roles").stream().anyMatch(r -> r.contains("ROLE_AGENT") || r.contains("ROLE_ADMIN"));
+        boolean isEmployee = jwt.getClaimAsStringList("roles").stream().anyMatch(r -> r.contains("AGENT") || r.contains("ADMIN"));
 
         if (!isEmployee && !loggedInId.equals(clientId)) {
             return ResponseEntity.status(403).build(); // Klijent ne sme da gleda tuđe

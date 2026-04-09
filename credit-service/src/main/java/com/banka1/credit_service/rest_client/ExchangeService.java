@@ -10,14 +10,31 @@ import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 
+/**
+ * REST Client for communicating with the Exchange Service.
+ * Provides methods for currency conversion calculations.
+ */
 @Service
 public class ExchangeService {
     private final RestClient restClient;
 
+    /**
+     * Constructs ExchangeService with a qualified RestClient bean.
+     *
+     * @param restClient the RestClient bean configured for exchange service communication
+     */
     public ExchangeService(@Qualifier("exchangeClient") RestClient restClient) {
         this.restClient = restClient;
     }
 
+    /**
+     * Calculates currency conversion for a given amount.
+     *
+     * @param fromCurrency the source currency code
+     * @param toCurrency the target currency code
+     * @param amount the amount to convert
+     * @return ConversionResponseDto containing conversion details and results
+     */
     public ConversionResponseDto calculate(CurrencyCode fromCurrency,
                                            CurrencyCode toCurrency,
                                            BigDecimal amount) {

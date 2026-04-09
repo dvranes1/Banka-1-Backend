@@ -47,6 +47,42 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Service implementation for capital gains tax calculation and collection.
+ *
+ * Handles the monthly tax collection process for all investment trading profits.
+ *
+ * Key Responsibilities:
+ * <ul>
+ *   <li>Calculate capital gains tax (15% rate) on sell transactions</li>
+ *   <li>Convert profits from foreign currencies to RSD via exchange-service</li>
+ *   <li>Settle tax payments to state account via account-service</li>
+ *   <li>Track tax debts and payments per user</li>
+ *   <li>Ensure idempotent execution (no duplicate charging)</li>
+ *   <li>Provide supervisor tax tracking and reporting</li>
+ * </ul>
+ *
+ * Tax Calculation Process:
+ * <ol>
+ *   <li>Fetch all SELL transactions from previous calendar month</li>
+ *   <li>For each sell transaction, calculate profit using cost basis from related buy orders</li>
+ *   <li>Apply 15% tax rate to profit</li>
+ *   <li>Convert to RSD if transaction was in foreign currency</li>
+ *   <li>Create TaxCharge record with PENDING status</li>
+ *   <li>Transfer amount to state account</li>
+ *   <li>Update TaxCharge status to CHARGED/PAID</li>
+ *   <li>Send notification to notification-service</li>
+ * </ol>
+ *
+ * Service Integrations:
+ * <ul>
+ *   <li>account-service: Verify account details, transfer tax to state account</li>
+ *   <li>employee-service: Get employee information</li>
+ *   <li>client-service: Get customer information</li>
+ *   <li>exchange-service: Currency conversion to RSD</li>
+ *   <li>stock-service: Fetch security information</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

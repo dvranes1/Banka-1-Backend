@@ -16,8 +16,20 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * REST controller exposing actuary management endpoints.
+ * REST controller exposing actuary (agent/supervisor) management endpoints.
+ *
+ * Provides supervisor-only access to agent trading limit management and status.
+ * Combines employee data from employee-service with local ActuaryInfo records
+ * to display comprehensive actuary information.
+ *
  * All endpoints require the SUPERVISOR role (which includes ADMIN via role hierarchy).
+ *
+ * Endpoints:
+ * <ul>
+ *   <li>GET /actuaries/agents - List all agents with optional filtering</li>
+ *   <li>PUT /actuaries/agents/{id}/limit - Update agent daily trading limit</li>
+ *   <li>PUT /actuaries/agents/{id}/reset-limit - Reset agent's daily used limit</li>
+ * </ul>
  */
 @RestController
 @RequestMapping("/actuaries")
@@ -27,14 +39,18 @@ public class ActuaryController {
     private final ActuaryService actuaryService;
 
     /**
-     * Returns a list of all agents, optionally filtered by email, name, surname, or position.
-     * Employee data is fetched from employee-service; actuary limits are loaded from the local database.
+     * Returns a paginated list of all agents, optionally filtered by employee data.
      *
-     * @param email    optional email filter
-     * @param ime      optional first name filter
-     * @param prezime  optional last name filter
-     * @param pozicija optional position filter
-     * @return list of agents with their actuary limit information
+     * Employee data is fetched from employee-service; actuary trading limits are
+     * loaded from the local database and merged.
+     *
+     * @param email    optional email filter (partial match, case-insensitive)
+     * @param ime      optional first name filter (partial match, case-insensitive)
+     * @param prezime  optional last name filter (partial match, case-insensitive)
+     * @param pozicija optional position filter (partial match, case-insensitive)
+     * @param page     page index (default: 0)
+     * @param size     page size (default: 10, max: 100)
+     * @return paginated list of agents with their actuary limit information
      */
     @GetMapping("/agents")
     @PreAuthorize("hasRole('SUPERVISOR')")
@@ -51,11 +67,16 @@ public class ActuaryController {
 
     /**
      * Updates the daily trading limit for the specified agent.
-     * Admins cannot be targeted. Only employees with the AGENT role are eligible.
+     *
+     * Only employees with the AGENT role can have their limit updated.
+     * Supervisors cannot be targeted (supervisors have no daily limit).
+     *
+     * When a new limit is set, the agent's used limit is reset to zero.
      *
      * @param id      the employee ID of the agent
      * @param request request body containing the new limit value in RSD
      * @return 200 OK on success
+     * @throws ResourceNotFoundException if employee not found
      */
     @PutMapping("/agents/{id}/limit")
     @PreAuthorize("hasRole('SUPERVISOR')")
@@ -69,10 +90,13 @@ public class ActuaryController {
 
     /**
      * Resets the used daily limit ({@code usedLimit}) to zero for the specified agent.
-     * Can be triggered manually by a supervisor at any time.
+     *
+     * This allows supervisors to manually reset an agent's daily consumption at any time,
+     * not just at the scheduled 23:59 reset. Useful for special circumstances or corrections.
      *
      * @param id the employee ID of the agent
      * @return 200 OK on success
+     * @throws ResourceNotFoundException if employee not found
      */
     @PutMapping("/agents/{id}/reset-limit")
     @PreAuthorize("hasRole('SUPERVISOR')")

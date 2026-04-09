@@ -159,6 +159,13 @@ public class StockMarketDataRefreshServiceImpl implements StockMarketDataRefresh
         );
     }
 
+    /**
+     * Loads a stock by ticker or throws HTTP 404 if it does not exist.
+     *
+     * @param ticker stock ticker
+     * @return existing stock entity
+     * @throws ResponseStatusException with {@link HttpStatus#NOT_FOUND} when no stock is found
+     */
     private Stock findStock(String ticker) {
         return stockRepository.findByTicker(ticker)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -167,6 +174,13 @@ public class StockMarketDataRefreshServiceImpl implements StockMarketDataRefresh
                 ));
     }
 
+    /**
+     * Loads the stock listing for one persisted stock or throws HTTP 404 if it does not exist.
+     *
+     * @param stock persisted stock entity
+     * @return existing stock listing
+     * @throws ResponseStatusException with {@link HttpStatus#NOT_FOUND} when no listing is found
+     */
     private Listing findStockListing(Stock stock) {
         return listingRepository.findByListingTypeAndSecurityId(ListingType.STOCK, stock.getId())
                 .orElseThrow(() -> new ResponseStatusException(
@@ -175,6 +189,15 @@ public class StockMarketDataRefreshServiceImpl implements StockMarketDataRefresh
                 ));
     }
 
+    /**
+     * Updates stock and listing fundamentals from the company overview provider response.
+     *
+     * <p>Only overwrites fields when the provider response contains non-null values.
+     *
+     * @param stock stock entity to update
+     * @param listing linked listing to update
+     * @param companyOverviewResponse provider response with company metadata
+     */
     private void applyCompanyOverview(
             Stock stock,
             Listing listing,
@@ -192,6 +215,13 @@ public class StockMarketDataRefreshServiceImpl implements StockMarketDataRefresh
         }
     }
 
+    /**
+     * Updates listing current market snapshot from the latest quote provider response.
+     *
+     * @param listing listing entity to update
+     * @param quoteResponse provider response with current quote data
+     * @param refreshTimestamp UTC timestamp of the refresh operation
+     */
     private void applyQuote(Listing listing, AlphaVantageQuoteResponse quoteResponse, LocalDateTime refreshTimestamp) {
         listing.setTicker(quoteResponse.symbol());
         listing.setPrice(quoteResponse.price());
@@ -202,6 +232,18 @@ public class StockMarketDataRefreshServiceImpl implements StockMarketDataRefresh
         listing.setLastRefresh(refreshTimestamp);
     }
 
+    /**
+     * Upserts historical daily price snapshots from provider time-series data.
+     *
+     * <p>The method keeps the most recent {@code dailyHistoryLimit} trading days and upserts
+     * them by listing id and date. It also ensures the latest trading day snapshot uses the latest
+     * quote bid/ask instead of daily close prices.
+     *
+     * @param listing listing whose history is being updated
+     * @param quoteResponse latest quote data used for the current trading day
+     * @param dailyResponse daily time-series data from the provider
+     * @return count of daily price entries persisted
+     */
     private int upsertDailyHistory(
             Listing listing,
             AlphaVantageQuoteResponse quoteResponse,
@@ -265,6 +307,13 @@ public class StockMarketDataRefreshServiceImpl implements StockMarketDataRefresh
         return entriesToPersist.size();
     }
 
+    /**
+     * Creates a new daily price snapshot entry for one listing and date.
+     *
+     * @param listing listing for which the entry is created
+     * @param date date of the daily snapshot
+     * @return new daily price entry with minimal initialization
+     */
     private ListingDailyPriceInfo createDailyEntry(Listing listing, LocalDate date) {
         ListingDailyPriceInfo entry = new ListingDailyPriceInfo();
         entry.setListing(listing);
@@ -272,6 +321,15 @@ public class StockMarketDataRefreshServiceImpl implements StockMarketDataRefresh
         return entry;
     }
 
+    /**
+     * Normalizes and validates a ticker string for API requests.
+     *
+     * <p>Returns the trimmed, uppercased ticker when valid. Rejects blank or null input.
+     *
+     * @param ticker raw ticker string from API request
+     * @return normalized ticker in uppercase
+     * @throws ResponseStatusException with {@link HttpStatus#BAD_REQUEST} when ticker is blank or null
+     */
     private String normalizeTicker(String ticker) {
         if (ticker == null || ticker.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticker must not be blank.");

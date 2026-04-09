@@ -4,12 +4,21 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+/**
+ * REST Client for communicating with the Client/User Service.
+ * Provides methods for retrieving client information.
+ */
 @Service
 public class ClientService {
 
 
     private final RestClient restClient;
 
+    /**
+     * Constructs ClientService with a qualified RestClient bean.
+     *
+     * @param restClient the RestClient bean configured for client service communication
+     */
     public ClientService(@Qualifier("userClient") RestClient restClient) {
         this.restClient = restClient;
     }

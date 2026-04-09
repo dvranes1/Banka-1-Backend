@@ -12,8 +12,26 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * RabbitMQ infrastructure configuration.
- * Sets up the connection factory, message template, JSON converter,
- * and the topic exchange used for order and tax notifications.
+ *
+ * Configures the RabbitMQ connection factory, message template, JSON converter,
+ * and the topic exchange used for order and tax event notifications.
+ *
+ * Configuration includes:
+ * <ul>
+ *   <li>Connection factory with host, port, username, password</li>
+ *   <li>RabbitTemplate for message publishing</li>
+ *   <li>Jackson-based JSON message converter for DTO serialization</li>
+ *   <li>Topic exchange declaration for order/tax events</li>
+ * </ul>
+ *
+ * Environment Variables:
+ * <ul>
+ *   <li>RABBITMQ_HOST: RabbitMQ broker hostname</li>
+ *   <li>RABBITMQ_PORT: RabbitMQ broker port</li>
+ *   <li>RABBITMQ_USERNAME: Authentication username</li>
+ *   <li>RABBITMQ_PASSWORD: Authentication password</li>
+ *   <li>NOTIFICATION_EXCHANGE: Topic exchange name for events</li>
+ * </ul>
  */
 @Configuration
 public class RabbitConfig {

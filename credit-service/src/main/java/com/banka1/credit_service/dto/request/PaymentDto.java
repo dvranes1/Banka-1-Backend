@@ -8,16 +8,16 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * DTO za zahtev izvršavanja finansijske transakcije ili transfera.
+ * DTO for financial transaction or transfer requests.
  * <p>
- * Koristi se za intra-bank transfere novca između računa, sa
- * mogućnošću konverzije između različitih valuta i nabijanjem komisije.
+ * Used for intra-bank transfers between accounts with support for
+ * currency conversion and commission calculation.
  * <p>
- * Validacija:
+ * Validation constraints:
  * <ul>
- *   <li>Oba broja računa moraju biti 19-cifreni</li>
- *   <li>Iznosi (fromAmount i toAmount) moraju biti pozitivni</li>
- *   <li>Komisija mora biti >= 0</li>
+ *   <li>Both account numbers must be 19 digits</li>
+ *   <li>Amounts (fromAmount and toAmount) must be positive</li>
+ *   <li>Commission must be >= 0</li>
  * </ul>
  */
 @AllArgsConstructor
@@ -26,47 +26,39 @@ import java.math.BigDecimal;
 @Setter
 public class PaymentDto {
     /**
-     * Broj računa sa kojeg se novac prenosi (19 cifara).
+     * The account number from which funds are transferred (19 digits).
      */
-
     private String fromAccountNumber;
 
     /**
-     * Broj računa na koji se novac prenosi (19 cifara).
+     * The account number to which funds are transferred (19 digits).
      */
-
     private String toAccountNumber;
 
     /**
-     * Iznos koji se prenosi iz izvornog računa u njegovoj valuti.
+     * The amount transferred from the source account in its currency.
      * <p>
-     * Ako su računi u različitim valutama, ovaj iznos se konvertuje
-     * prema toAmount.
+     * If the accounts are in different currencies, this amount is converted
+     * according to toAmount.
      */
-
     private BigDecimal fromAmount;
 
     /**
-     * Iznos koji se prima na odredišnom računu nakon konverzije (ako je primenjena).
+     * The amount received at the destination account after conversion (if applicable).
      * <p>
-     * Ako su računi u istoj valuti, ova vrednost je jednaka fromAmount.
-     * Ako su u različitim valutama, ova vrednost je konvertovana prema
-     * kursnim paritetu.
+     * If the accounts are in the same currency, this value equals fromAmount.
+     * If the accounts are in different currencies, this value is converted according to the exchange rate.
      */
-
     private BigDecimal toAmount;
 
     /**
-     * Komisija za transakciju. Obično se oduzima od izvornog računa.
+     * The commission for the transaction. Usually deducted from the source account.
      */
-
     private BigDecimal commission;
 
     /**
-     * ID klijenta koji inicira transfer (opciono, za audit log).
+     * The ID of the client initiating the transfer (optional, for audit logging).
      */
-
-
 
     private Long clientId;
 

@@ -56,6 +56,25 @@ import java.util.Set;
 
 /**
  * Implementation of OrderCreationService.
+ *
+ * Handles the complete order lifecycle from creation through approval and execution.
+ * Key responsibilities:
+ * <ul>
+ *   <li>Validate buy and sell order requests</li>
+ *   <li>Verify user permissions and account status</li>
+ *   <li>Check trading limits for agents/actuaries</li>
+ *   <li>Determine if supervisor approval is needed</li>
+ *   <li>Create and persist order entities</li>
+ *   <li>Manage order cancellations and supervisory actions</li>
+ *   <li>Send notifications on approval/decline</li>
+ * </ul>
+ *
+ * Integrates with multiple services:
+ * - StockClient: Fetch security listing details
+ * - AccountClient: Verify balance and process settlements
+ * - EmployeeClient: Get employee and actuary data
+ * - ExchangeClient: Convert foreign currency to RSD
+ * - OrderExecutionService: Execute pending orders
  */
 @Service
 @RequiredArgsConstructor

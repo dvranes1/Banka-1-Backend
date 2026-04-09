@@ -21,7 +21,26 @@ import java.util.List;
 
 /**
  * Default implementation of {@link ActuaryService}.
- * Combines employee data from employee-service with local {@link ActuaryInfo} records.
+ *
+ * Manages actuary (agent and supervisor) account information including daily trading limits,
+ * approval requirements, and limit consumption tracking.
+ *
+ * Combines employee data from employee-service with local {@link ActuaryInfo} records
+ * to provide a complete view of actuary permissions and restrictions.
+ *
+ * Key Responsibilities:
+ * <ul>
+ *   <li>Retrieve agents with pagination and filtering</li>
+ *   <li>Merge employee data with actuary trading limits</li>
+ *   <li>Update daily trading limits for agents</li>
+ *   <li>Sync actuary data from employee-service</li>
+ *   <li>Calculate remaining daily trading limit</li>
+ * </ul>
+ *
+ * Service Integrations:
+ * <ul>
+ *   <li>employee-service: Fetch employee data with role-based filtering</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor

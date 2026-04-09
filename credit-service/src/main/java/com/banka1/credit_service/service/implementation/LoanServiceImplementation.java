@@ -8,6 +8,9 @@ import com.banka1.credit_service.domain.enums.*;
 import com.banka1.credit_service.dto.request.BankPaymentDto;
 import com.banka1.credit_service.dto.request.LoanRequestDto;
 import com.banka1.credit_service.dto.response.*;
+import com.banka1.credit_service.rabbitMQ.EmailDto;
+import com.banka1.credit_service.rabbitMQ.EmailType;
+import com.banka1.credit_service.rabbitMQ.RabbitClient;
 import com.banka1.credit_service.repository.InstallmentRepository;
 import com.banka1.credit_service.repository.LoanRepository;
 import com.banka1.credit_service.repository.LoanRequestRepository;
@@ -22,6 +25,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.HttpClientErrorException;
 
 import java.math.BigDecimal;
@@ -46,6 +51,8 @@ public class LoanServiceImplementation implements LoanService {
     private final InstallmentRepository installmentRepository;
     private final LoanRepository loanRepository;
 
+    private final RabbitClient rabbitClient;
+
     @Value("${banka.security.id}")
     private String appPropertiesId;
     @Value("${banka.security.roles-claim}")
@@ -53,7 +60,7 @@ public class LoanServiceImplementation implements LoanService {
 
     private final double startRange=-1.5;
     private final double endRange=1.5;
-    private Set<String> employeeRoles=new HashSet<>(Set.of("BASIC","AGENT","SUPERVISOR","ADMIN"));
+    private final Set<String> employeeRoles=new HashSet<>(Set.of("BASIC","AGENT","SUPERVISOR","ADMIN"));
     private BigDecimal referenceRate=BigDecimal.valueOf(ThreadLocalRandom.current().nextDouble(startRange, endRange)).setScale(4, RoundingMode.HALF_UP);
 
 
@@ -125,13 +132,17 @@ public class LoanServiceImplementation implements LoanService {
         {
             throw new IllegalArgumentException("Valuta racuna ne odgovara valuti kredita");
         }
-        LoanRequest loanRequest=loanRequestRepository.save(new LoanRequest(loanRequestDto.getLoanType(),loanRequestDto.getInterestType(),loanRequestDto.getAmount(),loanRequestDto.getCurrency(),loanRequestDto.getPurpose(),loanRequestDto.getMonthlySalary(),loanRequestDto.getEmploymentStatus(),loanRequestDto.getCurrentEmploymentPeriod(),loanRequestDto.getRepaymentPeriod(),loanRequestDto.getContactPhone(),loanRequestDto.getAccountNumber(),loanRequestDto.getClientId(), Status.PENDING,accountDetailsResponseDto.getEmail(),accountDetailsResponseDto.getUsername()));
+        LoanRequest loanRequest=loanRequestRepository.save(new LoanRequest(loanRequestDto.getLoanType(),loanRequestDto.getInterestType(),loanRequestDto.getAmount(),loanRequestDto.getCurrency(),loanRequestDto.getPurpose(),loanRequestDto.getMonthlySalary(),loanRequestDto.getEmploymentStatus(),loanRequestDto.getCurrentEmploymentPeriod(),loanRequestDto.getRepaymentPeriod(),loanRequestDto.getContactPhone(),loanRequestDto.getAccountNumber(),accountDetailsResponseDto.getOwnerId(), Status.PENDING,accountDetailsResponseDto.getEmail(),accountDetailsResponseDto.getUsername()));
         return new LoanRequestResponseDto(loanRequest.getId(),loanRequest.getCreatedAt());
     }
 
     @Transactional
     @Override
     public String confirmation(Jwt jwt, Long id,Status status) {
+
+        if(!(status==Status.APPROVED || status==Status.DECLINED))
+            throw new IllegalArgumentException("Mozes da saljes samo status approved ili declined");
+
         String req="ODBIJEN";
         if(loanRequestRepository.updateStatus(id,status)!=1)
         {
@@ -140,11 +151,13 @@ public class LoanServiceImplementation implements LoanService {
                 throw new RuntimeException("Ne postoji loanRequest sa ovim id-em");
             throw new RuntimeException("Umesto PENDING status je: "+loanRequest.getStatus());
         }
+        EmailDto emailDto;
+        LoanRequest loanRequest=loanRequestRepository.findById(id).orElse(null);
+        if(loanRequest==null)
+            throw new IllegalStateException("Ako se ovo desi obavezno neka me neko kontaktira (Ognjen) posto ovo ne bi trebalo da je moguce");
         if(status==Status.APPROVED)
         {
-            LoanRequest loanRequest=loanRequestRepository.findById(id).orElse(null);
-            if(loanRequest==null)
-                throw new IllegalStateException("Ako se ovo desi obavezno neka me neko kontaktira (Ognjen) posto ovo ne bi trebalo da je moguce");
+
             InterestRateStore interest=interestRate(loanRequest.getAmount(),loanRequest.getCurrency(),loanRequest.getLoanType(),loanRequest.getInterestType(),Status.ACTIVE);
             BigDecimal stepen=interest.getEffectiveInterestRate().add(BigDecimal.ONE).pow(loanRequest.getRepaymentPeriod());
             BigDecimal val=interest.getEffectiveInterestRate().multiply(stepen).divide(stepen.subtract(BigDecimal.ONE),10, RoundingMode.HALF_UP);
@@ -166,12 +179,24 @@ public class LoanServiceImplementation implements LoanService {
             loan.setCurrency(loanRequest.getCurrency());
             //todo ovo bi trebalo da radi ali proveri
             loan.setStatus(Status.ACTIVE);
+            loan.setClientId(loanRequest.getClientId());
             loan.setUserEmail(loanRequest.getUserEmail());
             loan.setUsername(loanRequest.getUsername());
             loanRepository.save(loan);
             installmentRepository.save(new Installment(loan,monthlyRate,interest.getEffectiveInterestRate(),loan.getCurrency(),loan.getNextInstallmentDate(),null, PaymentStatus.UNPAID));
+            emailDto=new EmailDto(loanRequest.getUserEmail(),loanRequest.getUsername(), loan.getAmount(), loanRequest.getClientId());
             req="ODOBREN";
-        };
+        }
+        else
+        {
+            emailDto=new EmailDto(loanRequest.getUserEmail(),loanRequest.getUsername(),loanRequest.getClientId());
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                rabbitClient.sendEmailNotification(emailDto);
+            }
+        });
         //TODO rabbit mq
         return req+" ZAHTEV";
     }
@@ -190,13 +215,14 @@ public class LoanServiceImplementation implements LoanService {
             //todo ako ne radi staviti samo Exception umesto HttpClientErrorException
             catch (HttpClientErrorException e)
             {
-                //todo rabbitmq
+                int hours=24;
                 if(x.getPaymentStatus()!=PaymentStatus.OVERDUE) {
                     if (x.getRetry() == 0) {
                         LocalDate datum = today.plusDays(3);
                         x.setExpectedDueDate(datum);
                         x.getLoan().setNextInstallmentDate(datum);
                         x.setRetry(1);
+                        hours=72;
                     } else {
                         LocalDate datum = today.plusDays(1);
                         x.setExpectedDueDate(datum);
@@ -205,6 +231,13 @@ public class LoanServiceImplementation implements LoanService {
                         x.getLoan().setStatus(Status.OVERDUE);
                     }
                 }
+                Integer copy=hours;
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        rabbitClient.sendEmailNotification(new EmailDto(x.getLoan().getUserEmail(),x.getLoan().getUsername(),x.getLoan().getId(),x.getInstallmentAmount(),copy));
+                    }
+                });
                 continue;
             }
             BigDecimal interestPart = x.getLoan().getRemainingDebt().multiply(x.getInterestRateAtPayment());
@@ -223,6 +256,10 @@ public class LoanServiceImplementation implements LoanService {
                 BigDecimal val = rate.multiply(stepen).divide(stepen.subtract(BigDecimal.ONE), 10, RoundingMode.HALF_UP);
                 BigDecimal monthlyRate = x.getLoan().getRemainingDebt().multiply(val);
                 installmentRepository.save(new Installment(x.getLoan(),monthlyRate,rate,x.getLoan().getCurrency(), x.getLoan().getNextInstallmentDate(), null, PaymentStatus.UNPAID));
+            }
+            else
+            {
+                x.getLoan().setStatus(Status.PAID_OFF);
             }
         }
 
@@ -251,11 +288,11 @@ public class LoanServiceImplementation implements LoanService {
 
     @Override
     public LoanInfoResponseDto info(Jwt jwt, Long id) {
-        if(!(employeeRoles.contains(jwt.getClaim(roles).toString()) || ((Number) jwt.getClaim(appPropertiesId)).longValue()==id))
-            throw new IllegalArgumentException("Nemas dozvolu za ovu metodu");
         Loan loan=loanRepository.findById(id).orElse(null);
         if(loan==null)
             throw new IllegalArgumentException("Ne postoji loan sa ovim id");
+        if(!(employeeRoles.contains(jwt.getClaim(roles).toString()) || ((Number) jwt.getClaim(appPropertiesId)).longValue()==loan.getClientId()))
+            throw new IllegalArgumentException("Nemas dozvolu za ovu metodu");
         List<InstallmentResponseDto>list=new ArrayList<>();
         List<Installment> installments=loan.getInstallments();
         for(Installment x:installments)

@@ -9,15 +9,31 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+/**
+ * REST Client for communicating with the Account Service.
+ * Provides methods for account transfers, transactions, and account details retrieval.
+ */
 @Service
 public class AccountService {
 
     private final RestClient restClient;
 
+    /**
+     * Constructs AccountService with a qualified RestClient bean.
+     *
+     * @param restClient the RestClient bean configured for account service communication
+     */
     public AccountService(@Qualifier("accountClient") RestClient restClient) {
         this.restClient = restClient;
     }
 
+    /**
+     * Retrieves account information for both source and destination accounts.
+     *
+     * @param fromBankNumber the source bank account number
+     * @param toBankNumber the destination bank account number
+     * @return InfoResponseDto containing account details for both accounts
+     */
     public InfoResponseDto getInfo(String fromBankNumber, String toBankNumber) {
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -29,6 +45,12 @@ public class AccountService {
                 .body(InfoResponseDto.class);
     }
 
+    /**
+     * Performs a transfer between accounts.
+     *
+     * @param paymentDto the transfer details
+     * @return UpdatedBalanceResponseDto with updated balance information
+     */
     public UpdatedBalanceResponseDto transfer(PaymentDto paymentDto) {
         return restClient.post()
                 .uri("/internal/accounts/transfer")
@@ -37,6 +59,12 @@ public class AccountService {
                 .body(UpdatedBalanceResponseDto.class);
     }
 
+    /**
+     * Performs a transaction between accounts.
+     *
+     * @param paymentDto the transaction details
+     * @return UpdatedBalanceResponseDto with updated balance information
+     */
     public UpdatedBalanceResponseDto transaction(PaymentDto paymentDto) {
         return restClient.post()
                 .uri("/internal/accounts/transaction")
@@ -45,6 +73,12 @@ public class AccountService {
                 .body(UpdatedBalanceResponseDto.class);
     }
 
+    /**
+     * Performs a transaction originating from the bank.
+     *
+     * @param paymentDto the bank payment details
+     * @return UpdatedBalanceResponseDto with updated balance information
+     */
     public UpdatedBalanceResponseDto transactionFromBank(BankPaymentDto paymentDto) {
         return restClient.post()
                 .uri("/internal/accounts/transactionFromBank")
@@ -53,6 +87,12 @@ public class AccountService {
                 .body(UpdatedBalanceResponseDto.class);
     }
 
+    /**
+     * Retrieves detailed information about a specific account.
+     *
+     * @param accountNumber the account number
+     * @return AccountDetailsResponseDto with account details
+     */
     public AccountDetailsResponseDto getDetails(String accountNumber)
     {
         return restClient.get()

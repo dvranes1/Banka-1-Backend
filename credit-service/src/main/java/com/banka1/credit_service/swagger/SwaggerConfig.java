@@ -8,9 +8,19 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Swagger/OpenAPI configuration for the Credit Service API.
+ * Configures API documentation with security scheme for JWT Bearer token authentication.
+ */
 @Configuration
 public class SwaggerConfig {
 
+    /**
+     * Configures OpenAPI bean with API metadata and security scheme.
+     * Defines Bearer JWT authentication scheme for all API endpoints.
+     *
+     * @return configured OpenAPI instance
+     */
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()

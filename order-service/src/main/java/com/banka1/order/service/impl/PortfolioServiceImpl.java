@@ -40,14 +40,23 @@ import java.util.stream.Collectors;
  * Service implementation for managing user portfolios.
  *
  * Responsibilities:
- * - Aggregates portfolio positions per user
- * - Manages public exposure of stock positions (OTC visibility)
- * - Handles option exercise operations
- * - Maps internal Portfolio entities to API responses
+ * <ul>
+ *   <li>Aggregates portfolio positions per user</li>
+ *   <li>Enriches positions with market data from stock-service</li>
+ *   <li>Calculates profit/loss per position and aggregate metrics</li>
+ *   <li>Manages public exposure of stock positions (OTC visibility)</li>
+ *   <li>Handles option exercise operations with validation</li>
+ *   <li>Maps internal Portfolio entities to API responses</li>
+ * </ul>
  *
  * Integrations:
- * - stock-service (market data, listings)
- * - account-service (future/optional financial operations)
+ * <ul>
+ *   <li>stock-service: Fetch security listings, current prices, option details</li>
+ *   <li>account-service: Process option exercise settlements</li>
+ *   <li>employee-service: Verify user permissions</li>
+ *   <li>exchange-service: Currency conversion to RSD for profit calculation</li>
+ *   <li>tax-service: Retrieve current year paid tax and monthly unpaid tax</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor

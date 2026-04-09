@@ -9,6 +9,29 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * Represents capital gains tax charged on a single matched buy-sell pair.
+ *
+ * When a user sells securities, the profit (sale price - cost basis) is subject to
+ * a 15% capital gains tax. This entity tracks the tax obligation for each matched
+ * buy-sell transaction pair.
+ *
+ * Tax Calculation:
+ * <ol>
+ *   <li>Match sell transaction with corresponding buy transaction(s) using FIFO</li>
+ *   <li>Calculate profit: (sellPrice - buyPrice) × quantity</li>
+ *   <li>Apply 15% tax rate: profit × 0.15</li>
+ *   <li>Convert to RSD if transaction was in foreign currency</li>
+ *   <li>Create TaxCharge record</li>
+ * </ol>
+ *
+ * Status Lifecycle:
+ * <ul>
+ *   <li>PENDING: Calculated but not yet charged to user</li>
+ *   <li>CHARGED: Deducted from user's account</li>
+ *   <li>PAID: Settled with state/government account</li>
+ * </ul>
+ */
 @Entity
 @Table(
         name = "tax_charges",
@@ -26,50 +49,68 @@ public class TaxCharge {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Reference to the SELL transaction that triggered this tax. */
     @Column(name = "sell_transaction_id", nullable = false)
     private Long sellTransactionId;
 
+    /** Lazy-loaded reference to the sell transaction entity. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sell_transaction_id", insertable = false, updatable = false)
     private Transaction sellTransaction;
 
+    /** Reference to the matched BUY transaction (FIFO matching). */
     @Column(name = "buy_transaction_id", nullable = false)
     private Long buyTransactionId;
 
+    /** Lazy-loaded reference to the buy transaction entity. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "buy_transaction_id", insertable = false, updatable = false)
     private Transaction buyTransaction;
 
+    /** ID of the user (taxpayer) who made the sale. */
     @Column(nullable = false)
     private Long userId;
 
+    /** ID of the security listing being sold. */
     @Column(nullable = false)
     private Long listingId;
 
+    /** ID of the account from which tax will be deducted. */
     @Column(nullable = false)
     private Long sourceAccountId;
 
+    /** Start of the tax period (first day of calendar month). */
     @Column(nullable = false)
     private LocalDateTime taxPeriodStart;
 
+    /** End of the tax period (first day of next month). */
     @Column(nullable = false)
     private LocalDateTime taxPeriodEnd;
 
+    /** Tax amount in the security's original currency. */
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal taxAmount;
 
+    /** Tax amount converted to RSD. Used for settlement and reporting. */
     @Column(precision = 19, scale = 4)
     private BigDecimal taxAmountRsd;
 
+    /** Current lifecycle status: PENDING, CHARGED, or PAID. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TaxChargeStatus status;
 
+    /** Timestamp when this tax charge record was created. */
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    /** Timestamp when tax was charged to user's account. Null until charged. */
     private LocalDateTime chargedAt;
 
+    /**
+     * JPA callback that sets the creation timestamp automatically.
+     * Called before the first persist operation.
+     */
     @PrePersist
     public void initializeCreatedAt() {
         if (createdAt == null) {

@@ -146,6 +146,13 @@ public class ListingMarketDataRefreshServiceImpl implements ListingMarketDataRef
         );
     }
 
+    /**
+     * Loads a listing by id or throws HTTP 404 if it does not exist.
+     *
+     * @param listingId listing identifier
+     * @return existing listing entity
+     * @throws ResponseStatusException with {@link HttpStatus#NOT_FOUND} when no listing is found
+     */
     private Listing findListing(Long listingId) {
         return listingRepository.findById(listingId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -154,6 +161,17 @@ public class ListingMarketDataRefreshServiceImpl implements ListingMarketDataRef
                 ));
     }
 
+    /**
+     * Refreshes one stock listing snapshot from the latest quote provider response.
+     *
+     * <p>The method updates the listing with current bid/ask/price/volume from the provider
+     * and returns the latest trading day from the quote response.
+     *
+     * @param listing stock listing to refresh
+     * @param refreshTimestamp UTC timestamp of the refresh operation
+     * @return latest trading day from the quote response
+     * @throws ResponseStatusException when the underlying stock does not exist
+     */
     private LocalDate refreshStockListing(Listing listing, LocalDateTime refreshTimestamp) {
         Stock stock = stockRepository.findById(listing.getSecurityId())
                 .orElseThrow(() -> new ResponseStatusException(
@@ -174,6 +192,17 @@ public class ListingMarketDataRefreshServiceImpl implements ListingMarketDataRef
         return quoteResponse.latestTradingDay();
     }
 
+    /**
+     * Refreshes one FX listing snapshot from the latest exchange-rate provider response.
+     *
+     * <p>The method updates the listing and the linked FX pair with the current exchange rate
+     * and derives the daily change from the previous price.
+     *
+     * @param listing FX listing to refresh
+     * @param refreshTimestamp UTC timestamp of the refresh operation
+     * @return date from the provider response's last-refreshed timestamp
+     * @throws ResponseStatusException when the underlying FX pair does not exist or ticker format is invalid
+     */
     private LocalDate refreshForexListing(Listing listing, LocalDateTime refreshTimestamp) {
         ForexPair forexPair = forexPairRepository.findById(listing.getSecurityId())
                 .orElseThrow(() -> new ResponseStatusException(
@@ -202,6 +231,16 @@ public class ListingMarketDataRefreshServiceImpl implements ListingMarketDataRef
         return exchangeRateResponse.lastRefreshed().toLocalDate();
     }
 
+    /**
+     * Calculates the daily change for a FX listing from price movement.
+     *
+     * <p>Returns zero change when the previous price is null or zero, since percentage change
+     * cannot be reliably calculated without a meaningful baseline.
+     *
+     * @param previousPrice previous FX exchange rate
+     * @param currentPrice current FX exchange rate
+     * @return absolute change from previous to current, or zero when previous is undefined
+     */
     private BigDecimal resolveForexChange(BigDecimal previousPrice, BigDecimal currentPrice) {
         if (previousPrice == null || previousPrice.signum() == 0) {
             return ZERO_CHANGE;
@@ -209,6 +248,15 @@ public class ListingMarketDataRefreshServiceImpl implements ListingMarketDataRef
         return currentPrice.subtract(previousPrice);
     }
 
+    /**
+     * Upserts a daily price snapshot for one listing and date.
+     *
+     * <p>If a snapshot already exists for the listing and date, it is updated with the latest values.
+     * Otherwise, a new snapshot is created.
+     *
+     * @param listing listing whose daily snapshot is being updated
+     * @param date date of the daily snapshot
+     */
     private void upsertDailySnapshot(Listing listing, LocalDate date) {
         ListingDailyPriceInfo dailySnapshot = listingDailyPriceInfoRepository.findByListingIdAndDate(listing.getId(), date)
                 .orElseGet(() -> createDailySnapshot(listing, date));
@@ -222,6 +270,13 @@ public class ListingMarketDataRefreshServiceImpl implements ListingMarketDataRef
         listingDailyPriceInfoRepository.save(dailySnapshot);
     }
 
+    /**
+     * Creates a new daily price snapshot entity for one listing and date.
+     *
+     * @param listing listing for which the snapshot is created
+     * @param date date of the daily snapshot
+     * @return new daily snapshot with minimal initialization
+     */
     private ListingDailyPriceInfo createDailySnapshot(Listing listing, LocalDate date) {
         ListingDailyPriceInfo dailySnapshot = new ListingDailyPriceInfo();
         dailySnapshot.setListing(listing);
@@ -229,6 +284,15 @@ public class ListingMarketDataRefreshServiceImpl implements ListingMarketDataRef
         return dailySnapshot;
     }
 
+    /**
+     * Parses an FX ticker in BASE/QUOTE format and validates the component currencies.
+     *
+     * <p>The format must be exactly 3 letters, forward slash, 3 letters (e.g., {@code USD/EUR}).
+     *
+     * @param ticker FX ticker string in BASE/QUOTE format
+     * @return parsed currency pair
+     * @throws ResponseStatusException with {@link HttpStatus#BAD_REQUEST} when format is invalid
+     */
     private CurrencyPair parseCurrencyPair(String ticker) {
         if (ticker == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "FX listing ticker must not be null.");
