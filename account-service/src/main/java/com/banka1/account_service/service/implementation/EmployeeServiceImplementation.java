@@ -127,6 +127,7 @@ public class EmployeeServiceImplementation implements EmployeeService {
             clientInfoResponseDto= restClientService.getUser(jmbg);
         if(clientInfoResponseDto==null)
             throw new RuntimeException("Greska sa komunikacijom izmedju servisa");
+        clientInfoResponseDto.setUsername(clientInfoResponseDto.getName()+"_"+clientInfoResponseDto.getLastName());
         return clientInfoResponseDto;
     }
 
