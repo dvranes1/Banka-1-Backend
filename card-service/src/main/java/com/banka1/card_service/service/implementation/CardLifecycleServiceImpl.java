@@ -48,28 +48,28 @@ public class CardLifecycleServiceImpl implements CardLifecycleService {
     private final RabbitClient rabbitClient;
 
     /**
-     * Loads the card by card number and maps it to a full detail response.
+     * Loads the card by ID and maps it to a full detail response.
      * The CVV hash is never included in the returned DTO.
      *
-     * @param cardNumber card number to look up
+     * @param cardId card ID to look up
      * @return full card details
      */
     @Override
-    public CardDetailDTO getCardByCardNumber(String cardNumber) {
-        return new CardDetailDTO(findCardOrThrow(cardNumber));
+    public CardDetailDTO getCardById(Long cardId) {
+        return new CardDetailDTO(findCardByIdOrThrow(cardId));
     }
 
     /**
-     * Loads the card by card number and returns the owner's client ID.
+     * Loads the card by ID and returns the owner's client ID.
      * Used by controllers to verify that the requesting client owns the card
      * before allowing client-initiated operations.
      *
-     * @param cardNumber card number to look up
+     * @param cardId card ID to look up
      * @return client ID of the card owner
      */
     @Override
-    public Long getClientIdByCardNumber(String cardNumber) {
-        return findCardOrThrow(cardNumber).getClientId();
+    public Long getClientIdByCardId(Long cardId) {
+        return findCardByIdOrThrow(cardId).getClientId();
     }
 
     /**
@@ -115,12 +115,12 @@ public class CardLifecycleServiceImpl implements CardLifecycleService {
      * Both clients and employees may block a card.
      * Allowed transition: ACTIVE → BLOCKED.
      *
-     * @param cardNumber card number to block
+     * @param cardId card ID to block
      */
     @Override
     @Transactional
-    public void blockCard(String cardNumber) {
-        Card card = findCardOrThrow(cardNumber);
+    public void blockCard(Long cardId) {
+        Card card = findCardByIdOrThrow(cardId);
         transitionStatus(card, CardStatus.BLOCKED);
         cardRepository.save(card);
         registerAfterCommitNotification(card, CardNotificationType.CARD_BLOCKED);
@@ -163,16 +163,16 @@ public class CardLifecycleServiceImpl implements CardLifecycleService {
      * Validates the new limit and updates the card.
      * The limit must be zero or greater — zero effectively disables spending on the card.
      *
-     * @param cardNumber card number to update
+     * @param cardId card ID to update
      * @param newLimit new limit value, must be zero or greater
      */
     @Override
     @Transactional
-    public void updateCardLimit(String cardNumber, BigDecimal newLimit) {
+    public void updateCardLimit(Long cardId, BigDecimal newLimit) {
         if (newLimit == null || newLimit.signum() < 0) {
             throw new BusinessException(ErrorCode.INVALID_LIMIT, "Card limit must be zero or greater.");
         }
-        Card card = findCardOrThrow(cardNumber);
+        Card card = findCardByIdOrThrow(cardId);
         card.setCardLimit(newLimit);
         cardRepository.save(card);
     }
@@ -216,6 +216,21 @@ public class CardLifecycleServiceImpl implements CardLifecycleService {
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.CARD_NOT_FOUND,
                         "Card with number " + cardNumber + " was not found."
+                ));
+    }
+
+    /**
+     * Looks up a card by its database ID or throws a {@link BusinessException} if not found.
+     *
+     * @param cardId card ID to look up
+     * @return the matching card entity
+     * @throws BusinessException with {@link ErrorCode#CARD_NOT_FOUND} when no card matches
+     */
+    private Card findCardByIdOrThrow(Long cardId) {
+        return cardRepository.findById(cardId)
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.CARD_NOT_FOUND,
+                        "Card with ID " + cardId + " was not found."
                 ));
     }
 

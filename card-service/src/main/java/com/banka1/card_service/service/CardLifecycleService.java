@@ -8,27 +8,27 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Manages the lifecycle of existing cards — status transitions, limit changes, and retrieval.
+ * Manages the lifecycle of existing cards - status transitions, limit changes, and retrieval.
  * Card creation is handled separately by {@link CardCreationService}.
  */
 public interface CardLifecycleService {
 
     /**
-     * Returns full details for a single card identified by its card number.
+     * Returns full details for a single card identified by its database ID.
      *
-     * @param cardNumber card number to look up
+     * @param cardId card ID to look up
      * @return full card details
      */
-    CardDetailDTO getCardByCardNumber(String cardNumber);
+    CardDetailDTO getCardById(Long cardId);
 
     /**
      * Returns the client ID of the owner of the given card.
      * Used to verify ownership before performing client-initiated operations.
      *
-     * @param cardNumber card number to look up
+     * @param cardId card ID to look up
      * @return client ID of the card owner
      */
-    Long getClientIdByCardNumber(String cardNumber);
+    Long getClientIdByCardId(Long cardId);
 
     /**
      * Returns all cards owned by the given client.
@@ -59,16 +59,17 @@ public interface CardLifecycleService {
     List<CardInternalSummaryDTO> getInternalCardsByAccountNumber(String accountNumber);
 
     /**
-     * Blocks an active card. Both clients and employees may call this.
-     * Allowed transition: ACTIVE → BLOCKED.
+     * Blocks an active card identified by database ID.
+     * Both clients and employees may call this.
+     * Allowed transition: ACTIVE -> BLOCKED.
      *
-     * @param cardNumber card number to block
+     * @param cardId card ID to block
      */
-    void blockCard(String cardNumber);
+    void blockCard(Long cardId);
 
     /**
      * Unblocks a blocked card. Only employees may call this.
-     * Allowed transition: BLOCKED → ACTIVE.
+     * Allowed transition: BLOCKED -> ACTIVE.
      *
      * @param cardNumber card number to unblock
      */
@@ -76,18 +77,18 @@ public interface CardLifecycleService {
 
     /**
      * Permanently deactivates a card. Only employees may call this.
-     * Allowed transition: ACTIVE → DEACTIVATED or BLOCKED → DEACTIVATED.
-     * Deactivation is irreversible — a deactivated card cannot be reactivated.
+     * Allowed transition: ACTIVE -> DEACTIVATED or BLOCKED -> DEACTIVATED.
+     * Deactivation is irreversible - a deactivated card cannot be reactivated.
      *
      * @param cardNumber card number to deactivate
      */
     void deactivateCard(String cardNumber);
 
     /**
-     * Updates the spending limit on an existing card.
+     * Updates the spending limit on an existing card identified by database ID.
      *
-     * @param cardNumber card number to update
+     * @param cardId card ID to update
      * @param newLimit new limit value, must be zero or greater
      */
-    void updateCardLimit(String cardNumber, BigDecimal newLimit);
+    void updateCardLimit(Long cardId, BigDecimal newLimit);
 }

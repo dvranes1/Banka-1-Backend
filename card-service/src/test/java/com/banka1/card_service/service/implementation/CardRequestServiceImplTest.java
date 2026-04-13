@@ -20,7 +20,6 @@ import com.banka1.card_service.rabbitMQ.RabbitClient;
 import com.banka1.card_service.repository.AuthorizedPersonRepository;
 import com.banka1.card_service.repository.CardRepository;
 import com.banka1.card_service.rest_client.AccountNotificationContextDto;
-import com.banka1.card_service.rest_client.AccountService;
 import com.banka1.card_service.rest_client.ClientNotificationRecipientDto;
 import com.banka1.card_service.rest_client.ClientService;
 import com.banka1.card_service.rest_client.VerificationService;
@@ -46,6 +45,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -67,9 +67,6 @@ class CardRequestServiceImplTest {
     private AuthorizedPersonRepository authorizedPersonRepository;
 
     @Mock
-    private AccountService accountService;
-
-    @Mock
     private ClientService clientService;
 
     @Mock
@@ -87,7 +84,6 @@ class CardRequestServiceImplTest {
                 cardCreationService,
                 cardRepository,
                 authorizedPersonRepository,
-                accountService,
                 clientService,
                 verificationService,
                 rabbitClient,
@@ -113,8 +109,6 @@ class CardRequestServiceImplTest {
 
         Card createdCard = card(501L, 1L, null);
 
-        when(accountService.getAccountContext("265000000000123456"))
-                .thenReturn(new AccountNotificationContextDto(AccountOwnershipType.PERSONAL, 1L));
         when(verificationService.getStatus(77L))
                 .thenReturn(new VerificationStatusResponse(77L, VerificationStatus.VERIFIED));
         when(cardRepository.countByAccountNumberAndClientIdAndAuthorizedPersonIdIsNullAndStatusNot(
@@ -124,9 +118,13 @@ class CardRequestServiceImplTest {
                 .thenReturn(new CardCreationResult(createdCard, "555"));
         when(clientService.getNotificationRecipient(1L)).thenReturn(ownerRecipient());
 
-        var response = service.processManualCardRequest(1L, request);
+        var response = service.processManualCardRequest(
+                new AccountNotificationContextDto(AccountOwnershipType.PERSONAL, 1L),
+                request
+        );
 
         assertEquals("COMPLETED", response.status());
+        assertEquals(501L, response.createdCard().cardId());
         assertEquals("4111111111111111", response.createdCard().cardNumber());
         assertEquals("555", response.createdCard().plainCvv());
         verify(rabbitClient, never()).sendCardNotification(any(), any());
@@ -147,18 +145,49 @@ class CardRequestServiceImplTest {
         request.setCardLimit(BigDecimal.valueOf(1200));
         request.setVerificationId(10L);
 
-        when(accountService.getAccountContext("265000000000123456"))
-                .thenReturn(new AccountNotificationContextDto(AccountOwnershipType.PERSONAL, 1L));
         when(verificationService.getStatus(10L))
                 .thenReturn(new VerificationStatusResponse(10L, VerificationStatus.PENDING));
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.processManualCardRequest(1L, request)
+                () -> service.processManualCardRequest(
+                        new AccountNotificationContextDto(AccountOwnershipType.PERSONAL, 1L),
+                        request
+                )
         );
 
         assertEquals(ErrorCode.INVALID_REQUEST_STATE, exception.getErrorCode());
         verifyNoMoreInteractions(cardCreationService, clientService, rabbitClient);
+    }
+
+    @Test
+    void handleClientRequestUsesOwnerFromAccountContextForCardCreationAndNotification() {
+        ClientCardRequestDto request = new ClientCardRequestDto();
+        request.setAccountNumber("265000000000123456");
+        request.setCardBrand(CardBrand.VISA);
+        request.setCardLimit(BigDecimal.valueOf(1200));
+        request.setVerificationId(88L);
+
+        Card createdCard = card(600L, 55L, null);
+
+        when(verificationService.getStatus(88L))
+                .thenReturn(new VerificationStatusResponse(88L, VerificationStatus.VERIFIED));
+        when(cardRepository.countByAccountNumberAndClientIdAndAuthorizedPersonIdIsNullAndStatusNot(
+                "265000000000123456", 55L, CardStatus.DEACTIVATED
+        )).thenReturn(0L);
+        when(cardCreationService.createCard(any(CreateCardCommand.class)))
+                .thenReturn(new CardCreationResult(createdCard, "444"));
+        when(clientService.getNotificationRecipient(55L))
+                .thenReturn(new ClientNotificationRecipientDto(55L, "Owner", "User", "owner@example.com"));
+
+        service.processManualCardRequest(new AccountNotificationContextDto(AccountOwnershipType.PERSONAL, 55L), request);
+
+        verify(cardCreationService).createCard(argThat(command ->
+                command != null
+                        && Long.valueOf(55L).equals(command.clientId())
+                        && "265000000000123456".equals(command.accountNumber())
+        ));
+        verify(clientService).getNotificationRecipient(55L);
     }
 
     @Test
@@ -173,8 +202,6 @@ class CardRequestServiceImplTest {
 
         Card createdCard = card(777L, 1L, 7L);
 
-        when(accountService.getAccountContext("265000000000999999"))
-                .thenReturn(new AccountNotificationContextDto(AccountOwnershipType.BUSINESS, 1L));
         when(verificationService.getStatus(15L))
                 .thenReturn(new VerificationStatusResponse(15L, VerificationStatus.VERIFIED));
         when(authorizedPersonRepository.findByEmailIgnoreCaseAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndDateOfBirth(
@@ -197,7 +224,10 @@ class CardRequestServiceImplTest {
         });
         when(clientService.getNotificationRecipient(1L)).thenReturn(ownerRecipient());
 
-        var response = service.processBusinessCardRequest(1L, request);
+        var response = service.processBusinessCardRequest(
+                new AccountNotificationContextDto(AccountOwnershipType.BUSINESS, 1L),
+                request
+        );
 
         assertEquals("COMPLETED", response.status());
 
@@ -234,8 +264,6 @@ class CardRequestServiceImplTest {
 
         Card createdCard = card(880L, 1L, 20L);
 
-        when(accountService.getAccountContext("265000000000999999"))
-                .thenReturn(new AccountNotificationContextDto(AccountOwnershipType.BUSINESS, 1L));
         when(verificationService.getStatus(33L))
                 .thenReturn(new VerificationStatusResponse(33L, VerificationStatus.VERIFIED));
         when(authorizedPersonRepository.findByEmailIgnoreCaseAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndDateOfBirth(
@@ -252,7 +280,10 @@ class CardRequestServiceImplTest {
         when(authorizedPersonRepository.save(any(AuthorizedPerson.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(clientService.getNotificationRecipient(1L)).thenReturn(ownerRecipient());
 
-        var response = service.processBusinessCardRequest(1L, request);
+        var response = service.processBusinessCardRequest(
+                new AccountNotificationContextDto(AccountOwnershipType.BUSINESS, 1L),
+                request
+        );
 
         assertEquals("COMPLETED", response.status());
         ArgumentCaptor<CreateCardCommand> commandCaptor = ArgumentCaptor.forClass(CreateCardCommand.class);

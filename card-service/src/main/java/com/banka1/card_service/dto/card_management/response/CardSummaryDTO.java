@@ -6,7 +6,9 @@ import lombok.Getter;
 
 /**
  * Compact card representation used in list responses.
- * The card number is masked to protect sensitive data — only the first four
+ * The card ID is included so callers can fetch full details later
+ * without using the sensitive card number as a lookup key.
+ * The card number is masked to protect sensitive data - only the first four
  * and last four digits are visible, with asterisks replacing the middle digits.
  *
  * Example:
@@ -18,6 +20,11 @@ import lombok.Getter;
 public class CardSummaryDTO {
 
     /**
+     * Stable card identifier safe to use in follow-up API calls.
+     */
+    private final Long id;
+
+    /**
      * Masked card number safe for display in lists.
      * Format: first 4 digits + 8 asterisks + last 4 digits.
      */
@@ -26,6 +33,7 @@ public class CardSummaryDTO {
     private final String accountNumber;
 
     public CardSummaryDTO(Card card) {
+        this.id = card.getId();
         this.maskedCardNumber = SensitiveDataMasker.maskCardNumber(card.getCardNumber());
         this.accountNumber = card.getAccountNumber();
     }

@@ -46,9 +46,12 @@ public class CardManagementController {
 
     /**
      * Returns all cards owned by the authenticated client.
-     * Card numbers in the response are masked.
+     * Card numbers in the response are masked, while card IDs stay visible
+     * so clients can fetch the full details of a specific card later.
      * The {@code clientId} in the path must match the authenticated client's ID.
-     * Employee can see anybody's cards; Clients can see only their own.
+
+     * Employee can see anybody's cards;
+     * Clients can see only their own.
      *
      * @param jwt JWT of the authenticated client
      * @param clientId client ID path variable
@@ -68,44 +71,44 @@ public class CardManagementController {
     }
 
     /**
-     * Returns full details for a single card identified by card number.
+     * Returns full details for a single card identified by card ID.
      * Clients may access only their own cards, while employees may access any card.
      *
      * @param jwt JWT of the authenticated caller
      * @param authentication current Spring Security authentication
-     * @param cardNumber card number to look up
+     * @param cardId card ID to look up
      * @return full card details
      */
-    @GetMapping("/{cardNumber}")
+    @GetMapping("/id/{cardId}")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'BASIC')")
     public ResponseEntity<CardDetailDTO> getCardDetails(
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication,
-            @PathVariable String cardNumber
+            @PathVariable Long cardId
     ) {
-        verifyOwnershipIfClient(authentication, jwt, cardNumber);
-        return ResponseEntity.ok(cardLifecycleService.getCardByCardNumber(cardNumber));
+        verifyOwnershipIfClient(authentication, jwt, cardId);
+        return ResponseEntity.ok(cardLifecycleService.getCardById(cardId));
     }
 
     /**
-     * Blocks the card identified by card number.
+     * Blocks the card identified by card ID.
      * Clients may block only their own cards, while employees may block any card.
      * Allowed transition: ACTIVE {@code ->} BLOCKED.
      *
      * @param jwt JWT of the authenticated caller
      * @param authentication current Spring Security authentication
-     * @param cardNumber card number to block
+     * @param cardId card ID to block
      * @return 200 OK on success
      */
-    @PutMapping("/{cardNumber}/block")
+    @PutMapping("/id/{cardId}/block")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'BASIC')")
     public ResponseEntity<Void> blockCard(
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication,
-            @PathVariable String cardNumber
+            @PathVariable Long cardId
     ) {
-        verifyOwnershipIfClient(authentication, jwt, cardNumber);
-        cardLifecycleService.blockCard(cardNumber);
+        verifyOwnershipIfClient(authentication, jwt, cardId);
+        cardLifecycleService.blockCard(cardId);
         return ResponseEntity.ok().build();
     }
 
@@ -115,20 +118,20 @@ public class CardManagementController {
      *
      * @param jwt JWT of the authenticated caller
      * @param authentication current Spring Security authentication
-     * @param cardNumber card number to update
+     * @param cardId card ID to update
      * @param body request body containing the new limit
      * @return 200 OK on success
      */
-    @PutMapping("/{cardNumber}/limit")
+    @PutMapping("/id/{cardId}/limit")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'BASIC')")
     public ResponseEntity<Void> updateCardLimit(
             @AuthenticationPrincipal Jwt jwt,
             Authentication authentication,
-            @PathVariable String cardNumber,
+            @PathVariable Long cardId,
             @RequestBody @Valid UpdateCardLimitDTO body
     ) {
-        verifyOwnershipIfClient(authentication, jwt, cardNumber);
-        cardLifecycleService.updateCardLimit(cardNumber, body.getCardLimit());
+        verifyOwnershipIfClient(authentication, jwt, cardId);
+        cardLifecycleService.updateCardLimit(cardId, body.getCardLimit());
         return ResponseEntity.ok().build();
     }
 
@@ -139,7 +142,7 @@ public class CardManagementController {
 
     /**
      * Returns all cards associated with the given bank account number.
-     * Card numbers in the response are masked.
+     * Card numbers in the response are masked, while card IDs stay visible.
      * This endpoint is available only to employees.
      *
      * @param accountNumber bank account number
@@ -202,17 +205,13 @@ public class CardManagementController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * Applies ownership validation only for client callers.
-     * Employee callers are allowed to operate on any card and therefore skip this check.
-     *
-     * @param authentication current Spring Security authentication
-     * @param jwt JWT of the authenticated caller
-     * @param cardNumber card number whose owner should be checked
-     */
-    private void verifyOwnershipIfClient(Authentication authentication, Jwt jwt, String cardNumber) {
+    private void verifyOwnershipIfClient(Authentication authentication, Jwt jwt, Long cardId) {
         if (controllerSupport.isClient(authentication)) {
-            controllerSupport.verifyOwnership(jwt, cardLifecycleService.getClientIdByCardNumber(cardNumber));
+            controllerSupport.verifyOwnership(
+                    jwt,
+                    cardLifecycleService.getClientIdByCardId(cardId),
+                    "You do not own this card."
+            );
         }
     }
 }

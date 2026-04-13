@@ -5,6 +5,16 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+### Gradle
+/.gradle/
+/gradle/
+/gradlew
+/gradlew.bat
+out/
+/.gradle-local/
+/.gradle-user-home
+/.gradle-cache
+
 ### STS ###
 .apt_generated
 .classpath

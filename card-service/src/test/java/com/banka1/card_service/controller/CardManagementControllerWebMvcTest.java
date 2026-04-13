@@ -57,6 +57,7 @@ class CardManagementControllerWebMvcTest {
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CLIENT_BASIC"))
                                 .jwt(jwt -> jwt.claim("id", 1L))))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(15))
                 .andExpect(jsonPath("$[0].maskedCardNumber").value("5798********5571"));
     }
 
@@ -68,6 +69,7 @@ class CardManagementControllerWebMvcTest {
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BASIC"))
                                 .jwt(jwt -> jwt.claim("id", 100L))))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(15))
                 .andExpect(jsonPath("$[0].maskedCardNumber").value("5798********5571"));
 
         verify(cardLifecycleService).getCardsForClient(2L);
@@ -86,29 +88,30 @@ class CardManagementControllerWebMvcTest {
 
     @Test
     void getCardDetailsReturnsForbiddenForDifferentClient() throws Exception {
-        when(cardLifecycleService.getClientIdByCardNumber("5798123456785571")).thenReturn(2L);
+        when(cardLifecycleService.getClientIdByCardId(15L)).thenReturn(2L);
 
-        mockMvc.perform(get("/5798123456785571")
+        mockMvc.perform(get("/id/15")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CLIENT_BASIC"))
                                 .jwt(jwt -> jwt.claim("id", 1L))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ERR_CARD_007"));
 
-        verify(cardLifecycleService, never()).getCardByCardNumber(any());
+        verify(cardLifecycleService, never()).getCardById(any());
     }
 
     @Test
     void getCardDetailsAllowsEmployeeOnSharedRoute() throws Exception {
-        when(cardLifecycleService.getCardByCardNumber("5798123456785571"))
+        when(cardLifecycleService.getCardById(15L))
                 .thenReturn(new CardDetailDTO(card()));
 
-        mockMvc.perform(get("/5798123456785571")
+        mockMvc.perform(get("/id/15")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BASIC"))
                                 .jwt(jwt -> jwt.claim("id", 100L))))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(15))
                 .andExpect(jsonPath("$.cardNumber").value("5798123456785571"));
 
-        verify(cardLifecycleService, never()).getClientIdByCardNumber(any());
+        verify(cardLifecycleService, never()).getClientIdByCardId(any());
     }
 
     @Test
@@ -120,6 +123,7 @@ class CardManagementControllerWebMvcTest {
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BASIC"))
                                 .jwt(jwt -> jwt.claim("id", 100L))))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(15))
                 .andExpect(jsonPath("$[0].maskedCardNumber").value("5798********5571"));
     }
 
@@ -140,13 +144,13 @@ class CardManagementControllerWebMvcTest {
 
     @Test
     void blockCardAllowsEmployeeOnSharedRoute() throws Exception {
-        mockMvc.perform(put("/5798123456785571/block")
+        mockMvc.perform(put("/id/15/block")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_BASIC"))
                                 .jwt(jwt -> jwt.claim("id", 100L))))
                 .andExpect(status().isOk());
 
-        verify(cardLifecycleService).blockCard("5798123456785571");
-        verify(cardLifecycleService, never()).getClientIdByCardNumber(any());
+        verify(cardLifecycleService).blockCard(15L);
+        verify(cardLifecycleService, never()).getClientIdByCardId(any());
     }
 
     @Test
@@ -154,20 +158,21 @@ class CardManagementControllerWebMvcTest {
         UpdateCardLimitDTO request = new UpdateCardLimitDTO();
         request.setCardLimit(BigDecimal.valueOf(2500));
 
-        when(cardLifecycleService.getClientIdByCardNumber("5798123456785571")).thenReturn(1L);
+        when(cardLifecycleService.getClientIdByCardId(15L)).thenReturn(1L);
 
-        mockMvc.perform(put("/5798123456785571/limit")
+        mockMvc.perform(put("/id/15/limit")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_CLIENT_BASIC"))
                                 .jwt(jwt -> jwt.claim("id", 1L)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
-        verify(cardLifecycleService).updateCardLimit("5798123456785571", BigDecimal.valueOf(2500));
+        verify(cardLifecycleService).updateCardLimit(15L, BigDecimal.valueOf(2500));
     }
 
     private Card card() {
         Card card = new Card();
+        card.setId(15L);
         card.setCardNumber("5798123456785571");
         card.setCardType(CardType.DEBIT);
         card.setCardName("Visa Debit");

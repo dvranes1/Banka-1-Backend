@@ -28,14 +28,16 @@ Implemented now:
 - CVV generation plus hashing
 - card-creation orchestration
 - REST endpoints for card creation flows
+- lifecycle management endpoints for block, unblock, deactivate, and limit updates
+- list responses with masked card numbers plus card IDs
+- single-card detail lookup by card ID
 - account ownership checks against `account-service`
 - verification checks against `verification-service`
 - exception model for business validation failures
 
 Planned later:
 
-- block, unblock, and deactivate flows
-- masked card responses for clients
+- additional product-specific card features beyond the current debit-card scope
 
 ## Business Model
 
@@ -130,52 +132,98 @@ Generated plain CVV: 123
 Stored CVV hash:     $argon2id$v=19$...
 ```
 
-## Card Creation Flow
+## Card Creation Endpoints
 
-When a new card is created, the service does the following:
+`card-service` currently exposes three create flows:
 
-1. validates that the account number is not blank
-2. validates that the limit is not negative
-3. generates a unique brand-compliant card number
-4. generates a random three-digit CVV
-5. hashes the CVV before persistence
-6. sets `cardType` to `DEBIT`
-7. derives `cardName`, for example `MasterCard Debit`
-8. sets `creationDate` to the current date
-9. sets `expirationDate` to five years after `creationDate`
-10. sets `status` to `ACTIVE`
-11. saves the entity and returns the one-time plain CVV to the caller
+- `POST /auto` for automatic system-driven issuance
+- `POST /request` for personal-account card requests
+- `POST /request/business` for business-account card requests
 
-Example creation result:
+All three flows end in the same core card-creation step. Once all preconditions pass, the service:
 
-```text
-Persisted card:
-  cardNumber:     378282246310005
-  cardType:       DEBIT
-  cardName:       AmEx Debit
-  creationDate:   2026-03-23
-  expirationDate: 2031-03-23
-  accountNumber:  265000000000001234
-  cvv:            $argon2id$v=19$...
-  cardLimit:      12000.00
-  status:         ACTIVE
+1. generates a unique brand-compliant card number
+2. generates a random three-digit CVV
+3. hashes the CVV before persistence
+4. sets `cardType` to `DEBIT`
+5. derives `cardName`, for example `Visa Debit`
+6. sets `creationDate` to the current date
+7. sets `expirationDate` to five years after `creationDate`
+8. sets `status` to `ACTIVE`
+9. saves the card and returns the new `cardId`
 
-One-time return value:
-  plainCvv:       123
+Important response rule:
+
+- the full `cardNumber` is returned in the create response
+- the plain `CVV` is returned only once, in the create response
+- later list endpoints mask the card number
+- later card details are fetched by `cardId`
+
+Common create response shape:
+
+```json
+{
+  "cardId": 42,
+  "cardNumber": "4111111111111111",
+  "plainCvv": "123",
+  "expirationDate": "2031-03-23",
+  "cardName": "Visa Debit"
+}
 ```
 
-## Manual Request Flow
+### Automatic Card Creation
 
-Manual card creation is now a single-step flow for both personal and business accounts.
-
-The caller must first complete the external verification flow in `verification-service`.
-`card-service` then receives the final request together with `verificationId` and calls:
+Endpoint:
 
 ```text
-GET /{verificationId}/status
+POST /auto
 ```
 
-Only verification sessions with status `VERIFIED` are accepted. Any other status causes a business error response.
+Who calls it:
+
+- internal service caller or admin
+- intended for the automatic account-created flow
+
+What the request must contain:
+
+```json
+{
+  "clientId": 123,
+  "accountNumber": "265000000000123456",
+  "accountCurrency": "RSD",
+  "accountCategory": "PERSONAL",
+  "accountType": "CURRENT",
+  "accountSubtype": "STANDARD",
+  "ownerFirstName": "Pera",
+  "ownerLastName": "Peric",
+  "ownerEmail": "pera@example.com",
+  "ownerUsername": "pperic",
+  "accountExpirationDate": "2030-12-31"
+}
+```
+
+What is actually required for card creation in the current implementation:
+
+- `clientId` must exist
+- `accountNumber` must be non-blank
+
+What the service does:
+
+1. validates `clientId` and `accountNumber`
+2. picks a random brand from the supported brands
+3. applies the configured automatic default card limit
+4. creates a personal card for the provided account owner
+5. returns the created card immediately
+
+Response:
+
+- HTTP `201 Created`
+- body is the common create response shown above
+
+Notes:
+
+- this endpoint does not require `verificationId`
+- the extra account-owner fields in the request are currently carried by the internal DTO, but the card creation itself uses `clientId` and `accountNumber`
 
 ### Personal Card Request
 
@@ -185,7 +233,12 @@ Endpoint:
 POST /request
 ```
 
-Example request:
+Who calls it:
+
+- authenticated client for their own personal account
+- admin can also call it, but the created card still belongs to the actual owner of the account
+
+What the request must contain:
 
 ```json
 {
@@ -196,14 +249,43 @@ Example request:
 }
 ```
 
-Behavior:
+What must be true before creation:
 
-1. validate the request payload
-2. verify that the authenticated client owns the account
-3. reject business accounts on this endpoint
-4. require `verification-service` status `VERIFIED`
-5. enforce the personal rule: at most 2 active cards per account for the owner
-6. create the card and send the success notification after commit
+- `accountNumber` must be present
+- `cardBrand` must be present
+- `cardLimit` must be `0` or greater
+- the target account must be a personal account
+- if the caller is a client, they must own that account
+- `verification-service` must return status `VERIFIED` for the provided `verificationId`
+- the account owner must have fewer than 2 non-deactivated personal cards on that account
+
+What the service does:
+
+1. loads account context from `account-service`
+2. checks ownership in the controller for client callers
+3. checks verification status in `verification-service`
+4. creates the card for the real owner of the account
+5. sends a success notification after the transaction commits
+
+Response:
+
+- HTTP `201 Created`
+- body:
+
+```json
+{
+  "status": "COMPLETED",
+  "message": "Card created successfully.",
+  "verificationRequestId": null,
+  "createdCard": {
+    "cardId": 42,
+    "cardNumber": "4111111111111111",
+    "plainCvv": "123",
+    "expirationDate": "2031-03-23",
+    "cardName": "Visa Debit"
+  }
+}
+```
 
 ### Business Card Request
 
@@ -212,6 +294,21 @@ Endpoint:
 ```text
 POST /request/business
 ```
+
+Who calls it:
+
+- authenticated business-account owner
+- admin can also call it, but the card is still created under the real owner of the business account
+
+What the request must contain:
+
+- `accountNumber`
+- `recipientType`
+- `cardBrand`
+- `cardLimit`
+- `verificationId`
+
+If `recipientType` is `OWNER`, the card is issued to the business owner.
 
 Owner example:
 
@@ -224,6 +321,11 @@ Owner example:
   "verificationId": 88
 }
 ```
+
+If `recipientType` is `AUTHORIZED_PERSON`, the request must identify that person either by:
+
+- `authorizedPersonId`, or
+- inline `authorizedPerson` data
 
 Authorized person example:
 
@@ -246,14 +348,62 @@ Authorized person example:
 }
 ```
 
-Behavior:
+What must be true before creation:
 
-1. validate the request payload and recipient type
-2. verify that the authenticated client owns a business account
-3. require `verification-service` status `VERIFIED`
-4. resolve an existing authorized person when identity matches or create one from the inline payload
-5. enforce the business rule: at most 1 active card per person on the same account
-6. create the card and notify the owner, plus the authorized person when applicable
+- `accountNumber` must be present
+- `recipientType` must be present
+- `cardBrand` must be present
+- `cardLimit` must be `0` or greater
+- the target account must be a business account
+- if the caller is a client, they must own that business account
+- `verification-service` must return status `VERIFIED`
+- each person may have at most 1 non-deactivated business card on the same account
+
+How the recipient is resolved:
+
+1. if `recipientType = OWNER`, no authorized person is used
+2. if `recipientType = AUTHORIZED_PERSON` and `authorizedPersonId` is sent, that person must already exist
+3. otherwise the service tries to find an existing authorized person by identity fields
+4. if no match exists, a new authorized person is created from the inline payload
+
+What the service does:
+
+1. loads account context from `account-service`
+2. checks ownership in the controller for client callers
+3. checks verification status in `verification-service`
+4. resolves or creates the target authorized person when needed
+5. enforces the one-card-per-person business rule
+6. creates the card under the business owner, with optional `authorizedPersonId`
+7. sends a success notification to the owner and, when applicable, to the authorized person
+
+Response:
+
+- HTTP `201 Created`
+- body has the same wrapper shape as `/request`
+- `createdCard` contains `cardId`, full `cardNumber`, one-time `plainCvv`, `expirationDate`, and `cardName`
+
+## Card Retrieval Flow
+
+Client and employee retrieval uses two different payload shapes:
+
+- list endpoints return a masked card number together with the card `id`
+- creation endpoints return the new `cardId` immediately, together with the real `cardNumber` and one-time `plainCvv`
+- the single-card details endpoint uses that `id` and returns the full card number
+
+Current management routes:
+
+- `GET /client/{clientId}` returns the caller's cards with `id`, `maskedCardNumber`, and `accountNumber`
+- `GET /account/{accountNumber}` returns the same masked summaries for employee callers
+- `GET /id/{cardId}` returns the full card details, including the real `cardNumber`
+- `PUT /id/{cardId}/block` blocks the selected card without exposing the PAN in the route
+- `PUT /id/{cardId}/limit` updates the selected card limit without exposing the PAN in the route
+- `GET /internal/account/{accountNumber}` is used by `account-service` and keeps card numbers masked
+
+This means the normal client flow is:
+
+1. load the card list
+2. pick a card by `id`
+3. call `GET /id/{cardId}` to see the full card details
 
 ## Running Locally
 

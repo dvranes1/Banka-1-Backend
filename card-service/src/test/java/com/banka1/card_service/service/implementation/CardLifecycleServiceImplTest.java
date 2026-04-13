@@ -80,12 +80,12 @@ class CardLifecycleServiceImplTest {
     @Test
     void blockCard_activeCard_transitionsToBlocked() {
         Card card = cardWithStatus(CardStatus.ACTIVE);
-        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.findById(15L)).thenReturn(Optional.of(card));
         when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(accountService.getNotificationContext("265000000000123456")).thenReturn(personalAccount());
         when(clientService.getNotificationRecipient(1L)).thenReturn(recipient());
 
-        service.blockCard("1234");
+        service.blockCard(15L);
 
         assertEquals(CardStatus.BLOCKED, card.getStatus());
         verify(cardRepository).save(card);
@@ -97,13 +97,13 @@ class CardLifecycleServiceImplTest {
     @Test
     void blockCard_businessAccount_sendsToAuthorizedPersonAndOwner() {
         Card card = cardWithStatus(CardStatus.ACTIVE);
-        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.findById(15L)).thenReturn(Optional.of(card));
         when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(accountService.getNotificationContext("265000000000123456")).thenReturn(businessAccount(2L));
         when(clientService.getNotificationRecipient(1L)).thenReturn(recipient());
         when(clientService.getNotificationRecipient(2L)).thenReturn(ownerRecipient());
 
-        service.blockCard("1234");
+        service.blockCard(15L);
 
         TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
 
@@ -116,12 +116,12 @@ class CardLifecycleServiceImplTest {
     @Test
     void blockCard_businessAccountWithSameOwnerAndCardHolder_sendsSingleEmail() {
         Card card = cardWithStatus(CardStatus.ACTIVE);
-        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.findById(15L)).thenReturn(Optional.of(card));
         when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(accountService.getNotificationContext("265000000000123456")).thenReturn(businessAccount(1L));
         when(clientService.getNotificationRecipient(1L)).thenReturn(recipient());
 
-        service.blockCard("1234");
+        service.blockCard(15L);
 
         TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
 
@@ -133,18 +133,18 @@ class CardLifecycleServiceImplTest {
     @Test
     void blockCard_blockedCard_throwsBusinessException() {
         Card card = cardWithStatus(CardStatus.BLOCKED);
-        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.findById(15L)).thenReturn(Optional.of(card));
 
-        assertThrows(BusinessException.class, () -> service.blockCard("1234"));
+        assertThrows(BusinessException.class, () -> service.blockCard(15L));
         verify(cardRepository, never()).save(any());
     }
 
     @Test
     void blockCard_deactivatedCard_throwsBusinessException() {
         Card card = cardWithStatus(CardStatus.DEACTIVATED);
-        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.findById(15L)).thenReturn(Optional.of(card));
 
-        assertThrows(BusinessException.class, () -> service.blockCard("1234"));
+        assertThrows(BusinessException.class, () -> service.blockCard(15L));
         verify(cardRepository, never()).save(any());
     }
 
@@ -233,10 +233,10 @@ class CardLifecycleServiceImplTest {
     void updateCardLimit_validLimit_updatesCard() {
         Card card = cardWithStatus(CardStatus.ACTIVE);
         card.setCardLimit(BigDecimal.valueOf(1000));
-        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.findById(15L)).thenReturn(Optional.of(card));
         when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.updateCardLimit("1234", BigDecimal.valueOf(2000));
+        service.updateCardLimit(15L, BigDecimal.valueOf(2000));
 
         assertEquals(BigDecimal.valueOf(2000), card.getCardLimit());
         verify(cardRepository).save(card);
@@ -245,10 +245,10 @@ class CardLifecycleServiceImplTest {
     @Test
     void updateCardLimit_zeroLimit_allowed() {
         Card card = cardWithStatus(CardStatus.ACTIVE);
-        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.findById(15L)).thenReturn(Optional.of(card));
         when(cardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.updateCardLimit("1234", BigDecimal.ZERO);
+        service.updateCardLimit(15L, BigDecimal.ZERO);
 
         assertEquals(BigDecimal.ZERO, card.getCardLimit());
     }
@@ -256,14 +256,14 @@ class CardLifecycleServiceImplTest {
     @Test
     void updateCardLimit_negativeLimit_throwsBusinessException() {
         assertThrows(BusinessException.class,
-                () -> service.updateCardLimit("1234", BigDecimal.valueOf(-1)));
+                () -> service.updateCardLimit(15L, BigDecimal.valueOf(-1)));
         verify(cardRepository, never()).save(any());
     }
 
     @Test
     void updateCardLimit_nullLimit_throwsBusinessException() {
         assertThrows(BusinessException.class,
-                () -> service.updateCardLimit("1234", null));
+                () -> service.updateCardLimit(15L, null));
         verify(cardRepository, never()).save(any());
     }
 
@@ -271,9 +271,9 @@ class CardLifecycleServiceImplTest {
 
     @Test
     void blockCard_cardNotFound_throwsBusinessException() {
-        when(cardRepository.findByCardNumber("9999")).thenReturn(Optional.empty());
+        when(cardRepository.findById(9999L)).thenReturn(Optional.empty());
 
-        assertThrows(BusinessException.class, () -> service.blockCard("9999"));
+        assertThrows(BusinessException.class, () -> service.blockCard(9999L));
     }
 
     @Test
@@ -306,24 +306,25 @@ class CardLifecycleServiceImplTest {
         assertEquals("265000000000123456", result.get(0).getAccountNumber());
     }
 
-    // --- getCardByCardNumber ---
+    // --- getCardById ---
 
     @Test
-    void getCardByCardNumber_returnsCardDetail() {
+    void getCardById_returnsCardDetail() {
         Card card = cardWithStatus(CardStatus.ACTIVE);
-        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.findById(15L)).thenReturn(Optional.of(card));
 
-        var result = service.getCardByCardNumber("1234");
+        var result = service.getCardById(15L);
 
+        assertEquals(15L, result.getId());
         assertEquals("1234", result.getCardNumber());
         assertEquals(CardStatus.ACTIVE, result.getStatus());
     }
 
     @Test
-    void getCardByCardNumber_cardNotFound_throwsBusinessException() {
-        when(cardRepository.findByCardNumber("9999")).thenReturn(Optional.empty());
+    void getCardById_cardNotFound_throwsBusinessException() {
+        when(cardRepository.findById(9999L)).thenReturn(Optional.empty());
 
-        assertThrows(BusinessException.class, () -> service.getCardByCardNumber("9999"));
+        assertThrows(BusinessException.class, () -> service.getCardById(9999L));
     }
 
     // --- getCardsForClient ---
@@ -337,6 +338,7 @@ class CardLifecycleServiceImplTest {
         var result = service.getCardsForClient(1L);
 
         assertEquals(1, result.size());
+        assertEquals(15L, result.get(0).getId());
         assertEquals("5798********5571", result.get(0).getMaskedCardNumber());
     }
 
@@ -349,28 +351,29 @@ class CardLifecycleServiceImplTest {
         assertEquals(0, result.size());
     }
 
-    // --- getClientIdByCardNumber ---
+    // --- getClientIdByCardId ---
 
     @Test
-    void getClientIdByCardNumber_cardNotFound_throwsBusinessException() {
-        when(cardRepository.findByCardNumber("9999")).thenReturn(Optional.empty());
+    void getClientIdByCardId_cardNotFound_throwsBusinessException() {
+        when(cardRepository.findById(9999L)).thenReturn(Optional.empty());
 
-        assertThrows(BusinessException.class, () -> service.getClientIdByCardNumber("9999"));
+        assertThrows(BusinessException.class, () -> service.getClientIdByCardId(9999L));
     }
 
     @Test
-    void getClientIdByCardNumber_returnsCorrectClientId() {
+    void getClientIdByCardId_returnsCorrectClientId() {
         Card card = cardWithStatus(CardStatus.ACTIVE);
         card.setClientId(42L);
-        when(cardRepository.findByCardNumber("1234")).thenReturn(Optional.of(card));
+        when(cardRepository.findById(15L)).thenReturn(Optional.of(card));
 
-        Long clientId = service.getClientIdByCardNumber("1234");
+        Long clientId = service.getClientIdByCardId(15L);
 
         assertEquals(42L, clientId);
     }
 
     private Card cardWithStatus(CardStatus status) {
         Card card = new Card();
+        card.setId(15L);
         card.setCardNumber("1234");
         card.setAccountNumber("265000000000123456");
         card.setClientId(1L);

@@ -102,9 +102,10 @@ class CardCreationControllerIntegrationTest {
 
         String responseBody = mockMvc.perform(post("/auto")
                         .with(serviceJwt())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestBody))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cardId").exists())
                 .andExpect(jsonPath("$.cardNumber").exists())
                 .andExpect(jsonPath("$.plainCvv").exists())
                 .andExpect(jsonPath("$.expirationDate").exists())
@@ -125,6 +126,7 @@ class CardCreationControllerIntegrationTest {
         assertThat(persistedCard.getCardLimit()).isEqualByComparingTo(automaticDefaultLimit);
         assertThat(persistedCard.getStatus()).isEqualTo(CardStatus.ACTIVE);
         assertThat(ChronoUnit.YEARS.between(persistedCard.getCreationDate(), persistedCard.getExpirationDate())).isEqualTo(5);
+        assertThat(responseJson.get("cardId").asLong()).isEqualTo(persistedCard.getId());
         assertThat(responseJson.get("cardNumber").asText()).isEqualTo(persistedCard.getCardNumber());
         assertThat(responseJson.get("cardName").asText()).isEqualTo(persistedCard.getCardName());
         assertThat(responseJson.get("plainCvv").asText()).matches("\\d{3}");
@@ -157,6 +159,7 @@ class CardCreationControllerIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
                 .andExpect(jsonPath("$.message").value("Card created successfully."))
+                .andExpect(jsonPath("$.createdCard.cardId").exists())
                 .andExpect(jsonPath("$.createdCard.cardNumber").exists())
                 .andExpect(jsonPath("$.createdCard.plainCvv").exists())
                 .andReturn()
@@ -171,6 +174,50 @@ class CardCreationControllerIntegrationTest {
         assertThat(persistedCard.getAccountNumber()).isEqualTo(PERSONAL_ACCOUNT_NUMBER);
         assertThat(persistedCard.getAuthorizedPersonId()).isNull();
         assertThat(persistedCard.getCardLimit()).isEqualByComparingTo("1500.00");
+        assertThat(responseJson.get("createdCard").get("cardId").asLong()).isEqualTo(persistedCard.getId());
+        assertThat(responseJson.get("createdCard").get("cardNumber").asText()).isEqualTo(persistedCard.getCardNumber());
+
+        verify(rabbitClient, times(1)).sendCardNotification(eq(CardNotificationType.CARD_REQUEST_SUCCESS), eqNotificationForOwner());
+    }
+
+    @Test
+    @DisplayName("POST /request allows ADMIN callers while still assigning the card to the real account owner")
+    void manualPersonalCardRequest_byAdminAssignsCardToAccountOwner() throws Exception {
+        when(accountService.getAccountContext(PERSONAL_ACCOUNT_NUMBER))
+                .thenReturn(new AccountNotificationContextDto(AccountOwnershipType.PERSONAL, OWNER_CLIENT_ID));
+        when(verificationService.getStatus(77L))
+                .thenReturn(new VerificationStatusResponse(77L, VerificationStatus.VERIFIED));
+        when(clientService.getNotificationRecipient(OWNER_CLIENT_ID))
+                .thenReturn(ownerRecipient());
+
+        String requestPayload = """
+                {
+                  "accountNumber": "265000000000123456",
+                  "cardBrand": "VISA",
+                  "cardLimit": 1500.00,
+                  "verificationId": 77
+                }
+                """;
+
+        String responseBody = mockMvc.perform(post("/request")
+                        .with(adminJwt(999L))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestPayload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.createdCard.cardId").exists())
+                .andExpect(jsonPath("$.createdCard.cardNumber").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode responseJson = objectMapper.readTree(responseBody);
+        List<Card> persistedCards = cardRepository.findByClientId(OWNER_CLIENT_ID);
+
+        assertThat(persistedCards).hasSize(1);
+        Card persistedCard = persistedCards.get(0);
+        assertThat(persistedCard.getClientId()).isEqualTo(OWNER_CLIENT_ID);
+        assertThat(responseJson.get("createdCard").get("cardId").asLong()).isEqualTo(persistedCard.getId());
         assertThat(responseJson.get("createdCard").get("cardNumber").asText()).isEqualTo(persistedCard.getCardNumber());
 
         verify(rabbitClient, times(1)).sendCardNotification(eq(CardNotificationType.CARD_REQUEST_SUCCESS), eqNotificationForOwner());
@@ -198,10 +245,11 @@ class CardCreationControllerIntegrationTest {
 
         String responseBody = mockMvc.perform(post("/request/business")
                         .with(clientJwt(OWNER_CLIENT_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestPayload))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestPayload))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.createdCard.cardId").exists())
                 .andExpect(jsonPath("$.createdCard.cardNumber").exists())
                 .andReturn()
                 .getResponse()
@@ -216,6 +264,7 @@ class CardCreationControllerIntegrationTest {
         Card persistedCard = persistedCards.get(0);
         assertThat(persistedCard.getAuthorizedPersonId()).isNull();
         assertThat(persistedCard.getCardLimit()).isEqualByComparingTo("2500.00");
+        assertThat(responseJson.get("createdCard").get("cardId").asLong()).isEqualTo(persistedCard.getId());
         assertThat(responseJson.get("createdCard").get("cardNumber").asText()).isEqualTo(persistedCard.getCardNumber());
 
         verify(rabbitClient, times(1)).sendCardNotification(eq(CardNotificationType.CARD_REQUEST_SUCCESS), eqNotificationForOwner());
@@ -252,10 +301,11 @@ class CardCreationControllerIntegrationTest {
 
         String responseBody = mockMvc.perform(post("/request/business")
                         .with(clientJwt(OWNER_CLIENT_ID))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestPayload))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestPayload))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.createdCard.cardId").exists())
                 .andExpect(jsonPath("$.createdCard.cardNumber").exists())
                 .andReturn()
                 .getResponse()
@@ -277,6 +327,7 @@ class CardCreationControllerIntegrationTest {
         assertThat(authorizedPerson.getEmail()).isEqualTo("ana@example.com");
         assertThat(persistedCard.getAuthorizedPersonId()).isEqualTo(authorizedPerson.getId());
         assertThat(authorizedPerson.getCardIds()).containsExactly(persistedCard.getId());
+        assertThat(responseJson.get("createdCard").get("cardId").asLong()).isEqualTo(persistedCard.getId());
         assertThat(responseJson.get("createdCard").get("cardNumber").asText()).isEqualTo(persistedCard.getCardNumber());
 
         var notificationCaptor = org.mockito.ArgumentCaptor.forClass(CardNotificationDto.class);
@@ -308,5 +359,10 @@ class CardCreationControllerIntegrationTest {
     private RequestPostProcessor serviceJwt() {
         return jwt().authorities(new SimpleGrantedAuthority("ROLE_SERVICE"))
                 .jwt(token -> token.claim("id", 999L));
+    }
+
+    private RequestPostProcessor adminJwt(Long adminId) {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                .jwt(token -> token.claim("id", adminId));
     }
 }

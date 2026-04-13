@@ -22,7 +22,6 @@ import com.banka1.card_service.rabbitMQ.RabbitClient;
 import com.banka1.card_service.repository.AuthorizedPersonRepository;
 import com.banka1.card_service.repository.CardRepository;
 import com.banka1.card_service.rest_client.AccountNotificationContextDto;
-import com.banka1.card_service.rest_client.AccountService;
 import com.banka1.card_service.rest_client.ClientNotificationRecipientDto;
 import com.banka1.card_service.rest_client.ClientService;
 import com.banka1.card_service.rest_client.VerificationService;
@@ -57,7 +56,6 @@ public class CardRequestServiceImpl implements CardRequestService {
     private final CardCreationService cardCreationService;
     private final CardRepository cardRepository;
     private final AuthorizedPersonRepository authorizedPersonRepository;
-    private final AccountService accountService;
     private final ClientService clientService;
     private final VerificationService verificationService;
     private final RabbitClient rabbitClient;
@@ -90,18 +88,20 @@ public class CardRequestServiceImpl implements CardRequestService {
      * <p>The request must contain full card data together with a verification session ID.
      * Card-service no longer stores or validates a local personal verification code.
      *
-     * @param authenticatedClientId ID extracted from the authenticated JWT
+     * @param accountContext resolved account owner and ownership type
      * @param request personal-card request DTO
      * @return completed response with the newly created card
      */
     @Override
     @Transactional
-    public CardRequestResponseDto processManualCardRequest(Long authenticatedClientId, ClientCardRequestDto request) {
+    public CardRequestResponseDto processManualCardRequest(
+            AccountNotificationContextDto accountContext,
+            ClientCardRequestDto request
+    ) {
         validateInitiationRequest(request.getAccountNumber(), request.getCardBrand(), request.getCardLimit());
         String accountNumber = request.getAccountNumber().strip();
+        Long ownerClientId = requireOwnerClientId(accountContext);
 
-        AccountNotificationContextDto accountContext = accountService.getAccountContext(accountNumber);
-        assertOwner(authenticatedClientId, accountContext.ownerClientId());
         if (accountContext.isBusinessAccount()) {
             throw new BusinessException(
                     ErrorCode.INVALID_ACCOUNT_TYPE,
@@ -111,15 +111,15 @@ public class CardRequestServiceImpl implements CardRequestService {
         ensureVerificationIsVerified(request.getVerificationId());
 
         try {
-            enforcePersonalLimitOf2Accounts(accountNumber, authenticatedClientId);
+            enforcePersonalLimitOf2Accounts(accountNumber, ownerClientId);
             CardCreationResult result = cardCreationService.createCard(new CreateCardCommand(
                     accountNumber,
                     request.getCardBrand(),
                     request.getCardLimit(),
-                    authenticatedClientId,
+                    ownerClientId,
                     null
             ));
-            ClientNotificationRecipientDto ownerRecipient = clientService.getNotificationRecipient(authenticatedClientId);
+            ClientNotificationRecipientDto ownerRecipient = clientService.getNotificationRecipient(ownerClientId);
             registerAfterCommitRequestSuccess(ownerRecipient, null, result.card());
 
             return new CardRequestResponseDto(
@@ -145,27 +145,29 @@ public class CardRequestServiceImpl implements CardRequestService {
      * <p>The request must contain full card data together with a verification session ID.
      * Card-service no longer stores or validates a local business verification request.
      *
-     * @param authenticatedClientId ID extracted from the authenticated JWT of the business owner
+     * @param accountContext resolved account owner and ownership type
      * @param request business-card request DTO
      * @return completed response with the newly created card
      */
     @Override
     @Transactional
-    public CardRequestResponseDto processBusinessCardRequest(Long authenticatedClientId, BusinessCardRequestDto request) {
+    public CardRequestResponseDto processBusinessCardRequest(
+            AccountNotificationContextDto accountContext,
+            BusinessCardRequestDto request
+    ) {
         validateInitiationRequest(request.getAccountNumber(), request.getCardBrand(), request.getCardLimit());
         String accountNumber = request.getAccountNumber().strip();
+        Long ownerClientId = requireOwnerClientId(accountContext);
         if (request.getRecipientType() == null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST_STATE, "Recipient type must be provided.");
         }
 
-        AccountNotificationContextDto accountContext = accountService.getAccountContext(accountNumber);
         if (!accountContext.isBusinessAccount()) {
             throw new BusinessException(
                     ErrorCode.INVALID_ACCOUNT_TYPE,
                     "Personal accounts must use the /request endpoint."
             );
         }
-        assertOwner(authenticatedClientId, accountContext.ownerClientId());
         ensureVerificationIsVerified(request.getVerificationId());
 
         try {
@@ -176,13 +178,13 @@ public class CardRequestServiceImpl implements CardRequestService {
             Long authorizedPersonId = request.getRecipientType() == CardRequestRecipientType.AUTHORIZED_PERSON
                     ? authorizedPerson == null ? null : authorizedPerson.getId()
                     : null;
-            enforceBusinessLimit(accountNumber, authenticatedClientId, authorizedPersonId);
+            enforceBusinessLimit(accountNumber, ownerClientId, authorizedPersonId);
 
             CardCreationResult result = cardCreationService.createCard(new CreateCardCommand(
                     accountNumber,
                     request.getCardBrand(),
                     request.getCardLimit(),
-                    authenticatedClientId,
+                    ownerClientId,
                     authorizedPersonId
             ));
 
@@ -191,7 +193,7 @@ public class CardRequestServiceImpl implements CardRequestService {
                 authorizedPersonRepository.save(authorizedPerson);
             }
 
-            ClientNotificationRecipientDto ownerRecipient = clientService.getNotificationRecipient(authenticatedClientId);
+            ClientNotificationRecipientDto ownerRecipient = clientService.getNotificationRecipient(ownerClientId);
             NotificationRecipient authorizedRecipient = authorizedPerson == null ? null : toNotificationRecipient(authorizedPerson);
             registerAfterCommitRequestSuccess(ownerRecipient, authorizedRecipient, result.card());
 
@@ -249,16 +251,11 @@ public class CardRequestServiceImpl implements CardRequestService {
         }
     }
 
-    /**
-     * Verifies that the authenticated client is the owner of the referenced account.
-     *
-     * @param authenticatedClientId client ID extracted from authentication
-     * @param ownerClientId expected owner client ID
-     */
-    private void assertOwner(Long authenticatedClientId, Long ownerClientId) {
-        if (ownerClientId == null || !ownerClientId.equals(authenticatedClientId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "You do not own this account.");
+    private Long requireOwnerClientId(AccountNotificationContextDto accountContext) {
+        if (accountContext == null || accountContext.ownerClientId() == null) {
+            throw new BusinessException(ErrorCode.INVALID_CLIENT_ID, "Account owner client ID is missing.");
         }
+        return accountContext.ownerClientId();
     }
 
     /**

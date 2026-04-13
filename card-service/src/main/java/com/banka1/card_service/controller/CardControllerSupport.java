@@ -17,10 +17,25 @@ public class CardControllerSupport {
     @Value("${banka.security.id}")
     private String jwtIdClaim;
 
-    public void verifyOwnership(Jwt jwt, Long cardClientId) {
+    public void verifyOwnership(Jwt jwt, Long resourceOwnerClientId) {
+        verifyOwnership(jwt, resourceOwnerClientId, "You do not own this resource.");
+    }
+
+    public void verifyOwnership(Jwt jwt, Long resourceOwnerClientId, String message) {
         Long requestingClientId = extractClientId(jwt);
-        if (!requestingClientId.equals(cardClientId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "You do not own this card.");
+        if (!requestingClientId.equals(resourceOwnerClientId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, message);
+        }
+    }
+
+    public void verifyOwnershipIfClient(
+            Authentication authentication,
+            Jwt jwt,
+            Long resourceOwnerClientId,
+            String message
+    ) {
+        if (isClient(authentication)) {
+            verifyOwnership(jwt, resourceOwnerClientId, message);
         }
     }
 

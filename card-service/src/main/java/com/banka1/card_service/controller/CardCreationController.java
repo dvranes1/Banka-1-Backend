@@ -5,12 +5,15 @@ import com.banka1.card_service.dto.card_creation.request.BusinessCardRequestDto;
 import com.banka1.card_service.dto.card_creation.request.ClientCardRequestDto;
 import com.banka1.card_service.dto.card_creation.response.CardCreationResponseDto;
 import com.banka1.card_service.dto.card_creation.response.CardRequestResponseDto;
+import com.banka1.card_service.rest_client.AccountNotificationContextDto;
+import com.banka1.card_service.rest_client.AccountService;
 import com.banka1.card_service.service.CardRequestService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,12 +33,13 @@ public class CardCreationController {
 
     private final CardRequestService cardRequestService;
     private final CardControllerSupport controllerSupport;
+    private final AccountService accountService;
 
     /**
      * A card is AUTOMATICALLY created for the user, when the user account has been CREATED.
      *
      * @param body internal request payload
-     * @return created card
+     * @return created card, including the stable card ID for follow-up management calls
      */
     @PostMapping("/auto")
     @PreAuthorize("hasAnyRole('SERVICE', 'ADMIN')")
@@ -49,16 +53,18 @@ public class CardCreationController {
      *
      * @param jwt JWT of the authenticated client
      * @param body request payload including {@code verificationId}
-     * @return created card response
+     * @return created card response with the new card ID and one-time sensitive card data
      */
     @PostMapping("/request")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'ADMIN')")
     public ResponseEntity<CardRequestResponseDto> requestBasicCard(
+            Authentication authentication,
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody @Valid ClientCardRequestDto body
     ) {
-        CardRequestResponseDto response = cardRequestService.processManualCardRequest(
-                controllerSupport.extractClientId(jwt), body);
+        AccountNotificationContextDto accountContext = loadAccountContext(body.getAccountNumber());
+        verifyOwnershipIfClient(authentication, jwt, accountContext);
+        CardRequestResponseDto response = cardRequestService.processManualCardRequest(accountContext, body);
         return ResponseEntity.status(resolveRequestStatus(response)).body(response);
     }
 
@@ -67,20 +73,44 @@ public class CardCreationController {
      *
      * @param jwt JWT of the authenticated client
      * @param body request payload including {@code verificationId}
-     * @return created card response
+     * @return created card response with the new card ID and one-time sensitive card data
      */
     @PostMapping("/request/business")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'ADMIN')")
     public ResponseEntity<CardRequestResponseDto> requestBusinessCard(
+            Authentication authentication,
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody @Valid BusinessCardRequestDto body
     ) {
-        CardRequestResponseDto response = cardRequestService.processBusinessCardRequest(
-                controllerSupport.extractClientId(jwt), body);
+        AccountNotificationContextDto accountContext = loadAccountContext(body.getAccountNumber());
+        verifyOwnershipIfClient(authentication, jwt, accountContext);
+        CardRequestResponseDto response = cardRequestService.processBusinessCardRequest(accountContext, body);
         return ResponseEntity.status(resolveRequestStatus(response)).body(response);
     }
 
     private HttpStatus resolveRequestStatus(CardRequestResponseDto response) {
         return response.createdCard() == null ? HttpStatus.ACCEPTED : HttpStatus.CREATED;
+    }
+
+    private AccountNotificationContextDto loadAccountContext(String accountNumber) {
+        if (accountNumber == null || accountNumber.isBlank()) {
+            return new AccountNotificationContextDto(null, null);
+        }
+        return accountService.getAccountContext(accountNumber.strip());
+    }
+
+    private void verifyOwnershipIfClient(
+            Authentication authentication,
+            Jwt jwt,
+            AccountNotificationContextDto accountContext
+    ) {
+        if (accountContext.ownerClientId() != null) {
+            controllerSupport.verifyOwnershipIfClient(
+                    authentication,
+                    jwt,
+                    accountContext.ownerClientId(),
+                    "You do not own this account."
+            );
+        }
     }
 }

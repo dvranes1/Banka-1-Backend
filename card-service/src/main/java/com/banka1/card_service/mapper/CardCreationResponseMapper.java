@@ -14,6 +14,7 @@ public class CardCreationResponseMapper {
     public CardCreationResponseDto toDto(CardCreationResult result) {
         Card card = result.card();
         return new CardCreationResponseDto(
+                card.getId(),
                 card.getCardNumber(),
                 result.plainCvv(),
                 card.getExpirationDate(),
