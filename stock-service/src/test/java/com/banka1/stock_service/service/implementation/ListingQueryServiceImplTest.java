@@ -138,7 +138,8 @@ class ListingQueryServiceImplTest {
         );
 
         ListingFilterRequest filteredRequest = new ListingFilterRequest();
-        filteredRequest.setSettlementDate(LocalDate.of(2026, 6, 15));
+        filteredRequest.setSettlementDateFrom(LocalDate.of(2026, 6, 15));
+        filteredRequest.setSettlementDateTo(LocalDate.of(2026, 6, 15));
 
         Page<ListingSummaryResponse> filteredResponse = listingQueryService.getFuturesListings(
                 filteredRequest,
