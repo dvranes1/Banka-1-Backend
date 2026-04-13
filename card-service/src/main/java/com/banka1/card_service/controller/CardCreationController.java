@@ -8,6 +8,7 @@ import com.banka1.card_service.dto.card_creation.response.CardRequestResponseDto
 import com.banka1.card_service.rest_client.AccountNotificationContextDto;
 import com.banka1.card_service.rest_client.AccountService;
 import com.banka1.card_service.service.CardRequestService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -42,6 +43,7 @@ public class CardCreationController {
      * @return created card, including the stable card ID for follow-up management calls
      */
     @PostMapping("/auto")
+    @Operation(summary = "Automatically create a debit card for a newly created account")
     @PreAuthorize("hasAnyRole('SERVICE', 'ADMIN')")
     public ResponseEntity<?> autoCreateCard(@RequestBody @Valid AutoCardCreationRequestDto body) {
         CardCreationResponseDto response = cardRequestService.createAutomaticCard(body);
@@ -56,6 +58,7 @@ public class CardCreationController {
      * @return created card response with the new card ID and one-time sensitive card data
      */
     @PostMapping("/request")
+    @Operation(summary = "Create a personal debit card for a verified personal account")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'ADMIN')")
     public ResponseEntity<CardRequestResponseDto> requestBasicCard(
             Authentication authentication,
@@ -76,6 +79,7 @@ public class CardCreationController {
      * @return created card response with the new card ID and one-time sensitive card data
      */
     @PostMapping("/request/business")
+    @Operation(summary = "Create a business debit card for the owner or an authorized person")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'ADMIN')")
     public ResponseEntity<CardRequestResponseDto> requestBusinessCard(
             Authentication authentication,

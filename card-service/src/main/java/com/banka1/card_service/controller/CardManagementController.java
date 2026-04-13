@@ -5,6 +5,7 @@ import com.banka1.card_service.dto.card_management.response.CardDetailDTO;
 import com.banka1.card_service.dto.card_management.response.CardInternalSummaryDTO;
 import com.banka1.card_service.dto.card_management.response.CardSummaryDTO;
 import com.banka1.card_service.service.CardLifecycleService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -58,6 +59,7 @@ public class CardManagementController {
      * @return list of masked card summaries
      */
     @GetMapping("/client/{clientId}")
+    @Operation(summary = "List all cards for a client across their accounts")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'BASIC')")
     public ResponseEntity<List<CardSummaryDTO>> getCardsForClient(
             @AuthenticationPrincipal Jwt jwt,
@@ -80,6 +82,7 @@ public class CardManagementController {
      * @return full card details
      */
     @GetMapping("/id/{cardId}")
+    @Operation(summary = "Get full card details by card ID")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'BASIC')")
     public ResponseEntity<CardDetailDTO> getCardDetails(
             @AuthenticationPrincipal Jwt jwt,
@@ -101,6 +104,7 @@ public class CardManagementController {
      * @return 200 OK on success
      */
     @PutMapping("/id/{cardId}/block")
+    @Operation(summary = "Block a card by card ID")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'BASIC')")
     public ResponseEntity<Void> blockCard(
             @AuthenticationPrincipal Jwt jwt,
@@ -123,6 +127,7 @@ public class CardManagementController {
      * @return 200 OK on success
      */
     @PutMapping("/id/{cardId}/limit")
+    @Operation(summary = "Update a card spending limit by card ID")
     @PreAuthorize("hasAnyRole('CLIENT_BASIC', 'BASIC')")
     public ResponseEntity<Void> updateCardLimit(
             @AuthenticationPrincipal Jwt jwt,
@@ -149,6 +154,7 @@ public class CardManagementController {
      * @return list of masked card summaries
      */
     @GetMapping("/account/{accountNumber}")
+    @Operation(summary = "List all cards for a specific account number")
     @PreAuthorize("hasRole('BASIC')")
     public ResponseEntity<List<CardSummaryDTO>> getCardsByAccount(@PathVariable String accountNumber) {
         return ResponseEntity.ok(cardLifecycleService.getCardsByAccountNumber(accountNumber));
@@ -169,6 +175,7 @@ public class CardManagementController {
      * @return list of internal card summaries
      */
     @GetMapping("/internal/account/{accountNumber}")
+    @Operation(summary = "List masked card summaries for an account for internal service use")
     @PreAuthorize("hasRole('SERVICE')")
     public ResponseEntity<List<CardInternalSummaryDTO>> getCardsByAccountInternal(@PathVariable String accountNumber) {
         return ResponseEntity.ok(cardLifecycleService.getInternalCardsByAccountNumber(accountNumber));
@@ -183,6 +190,7 @@ public class CardManagementController {
      * @return 200 OK on success
      */
     @PutMapping("/{cardNumber}/unblock")
+    @Operation(summary = "Unblock a card by card number")
     @PreAuthorize("hasRole('BASIC')")
     public ResponseEntity<Void> unblockCard(@PathVariable String cardNumber) {
         cardLifecycleService.unblockCard(cardNumber);
@@ -199,6 +207,7 @@ public class CardManagementController {
      * @return 200 OK on success
      */
     @PutMapping("/{cardNumber}/deactivate")
+    @Operation(summary = "Deactivate a card by card number")
     @PreAuthorize("hasRole('BASIC')")
     public ResponseEntity<Void> deactivateCard(@PathVariable String cardNumber) {
         cardLifecycleService.deactivateCard(cardNumber);
