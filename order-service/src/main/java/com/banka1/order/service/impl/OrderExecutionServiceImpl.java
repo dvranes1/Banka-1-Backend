@@ -8,6 +8,7 @@ import com.banka1.order.dto.AccountDetailsDto;
 import com.banka1.order.dto.BankAccountDto;
 import com.banka1.order.dto.ExchangeRateDto;
 import com.banka1.order.dto.StockListingDto;
+import com.banka1.order.dto.client.OneSidedTransactionDto;
 import com.banka1.order.dto.client.PaymentDto;
 import com.banka1.order.entity.ActuaryInfo;
 import com.banka1.order.entity.Order;
@@ -310,6 +311,16 @@ public class OrderExecutionServiceImpl implements OrderExecutionService {
     }
 
     private void updatePortfolio(Order order, StockListingDto listing, int quantity, BigDecimal executionPricePerUnit) {
+        // GHI #199 follow-up (alukic7 komentar): FOREX trade is a currency swap between two cash
+        // accounts, not a position-taking trade. Storing it as a Portfolio holding is wrong --
+        // there is no "amount of EUR/USD pair" you own; you just exchanged one currency for
+        // another. Settlement (the actual cash movement) is handled in transferFunds via
+        // currency-conversion-aware credit/debit on the trader's accounts.
+        ListingType listingType = listing.getListingType() == null ? ListingType.STOCK : listing.getListingType();
+        if (listingType == ListingType.FOREX) {
+            return;
+        }
+
         Portfolio portfolio = portfolioRepository.findByUserIdAndListingIdForUpdate(order.getUserId(), order.getListingId()).orElse(null);
 
         if (order.getDirection() == OrderDirection.BUY) {
@@ -347,19 +358,64 @@ public class OrderExecutionServiceImpl implements OrderExecutionService {
         }
     }
 
+    /**
+     * Settles the trade leg of an order against the trader's account only -- the bank's own
+     * account is NEVER credited or debited for the trade amount itself. Per the PM directive
+     * recorded in GHI #199 ("ne daje banci pare, samo se skidaju sa racuna"), exchange BUY
+     * deducts the trader's account by the trade amount and exchange SELL credits it; there is
+     * no offsetting bank-side leg. Commissions/fees are handled by a separate path
+     * ({@code transferFee} in OrderCreationServiceImpl) and continue to flow into the bank's
+     * commission account as required by Celina 3.
+     *
+     * <p>Actuary orders (where the funding account already IS the bank's own account) remain a
+     * no-op: any movement against the bank's account on a BUY would directly contradict the
+     * directive, and on a SELL would create money out of thin air on the bank balance.
+     */
     private void transferFunds(Order order, String currency, BigDecimal amount) {
         BankAccountDto bankAccount = employeeClient.getBankAccount(currency);
         boolean actuaryOrder = bankAccount.getAccountId() != null && bankAccount.getAccountId().equals(order.getAccountId());
-
-        if (order.getDirection() == OrderDirection.BUY) {
-            if (actuaryOrder) {
-                return;
-            }
-            transferForClient(order.getAccountId(), bankAccount.getAccountId(), amount, currency, "Order execution");
+        if (actuaryOrder) {
             return;
         }
 
-        transferWithoutConversionFee(bankAccount.getAccountId(), order.getAccountId(), amount, currency, "Order execution");
+        AccountDetailsDto traderAccount = accountClient.getAccountDetails(order.getAccountId());
+        BigDecimal localAmount = convertTradeAmountToAccountCurrency(traderAccount, currency, amount, order.getDirection());
+
+        OneSidedTransactionDto request = new OneSidedTransactionDto(
+                traderAccount.getAccountNumber(),
+                localAmount,
+                traderAccount.getOwnerId(),
+                "Order execution"
+        );
+
+        if (order.getDirection() == OrderDirection.BUY) {
+            accountClient.exchangeBuy(request);
+        } else {
+            accountClient.exchangeSell(request);
+        }
+    }
+
+    /**
+     * Converts the trade amount expressed in the listing's currency into the trader's account
+     * currency when they differ. Currency conversion follows the same rules as the previous
+     * {@code transferForClient}/{@code transferWithoutConversionFee} pair, so behaviour for
+     * cross-currency BUY/SELL stays consistent: clients pay (or receive) in their own
+     * account's currency, never on the bank's books.
+     */
+    private BigDecimal convertTradeAmountToAccountCurrency(AccountDetailsDto traderAccount,
+                                                           String tradeCurrency,
+                                                           BigDecimal tradeAmount,
+                                                           OrderDirection direction) {
+        String accountCurrency = traderAccount.getCurrency();
+        if (accountCurrency == null || accountCurrency.equalsIgnoreCase(tradeCurrency)) {
+            return tradeAmount;
+        }
+        ExchangeRateDto conversion = direction == OrderDirection.BUY
+                ? exchangeClient.calculate(tradeCurrency, accountCurrency, tradeAmount)
+                : exchangeClient.calculateWithoutCommission(tradeCurrency, accountCurrency, tradeAmount);
+        return conversion == null || conversion.getConvertedAmount() == null
+                ? tradeAmount
+                : conversion.getConvertedAmount();
     }
 
     private void finalizeActuaryExposure(Order order, String currency, BigDecimal amount) {
@@ -440,52 +496,6 @@ public class OrderExecutionServiceImpl implements OrderExecutionService {
         }
         ExchangeRateDto conversion = exchangeClient.calculateWithoutCommission(fromCurrency, toCurrency, amount);
         return conversion.getConvertedAmount() == null ? amount : conversion.getConvertedAmount();
-    }
-
-    private void transferWithoutConversionFee(Long fromAccountId, Long toAccountId, BigDecimal amount, String currency, String description) {
-        if (fromAccountId != null && fromAccountId.equals(toAccountId)) {
-            throw new IllegalStateException("Transfer source and destination must differ");
-        }
-        AccountDetailsDto fromAccount = accountClient.getAccountDetails(fromAccountId);
-        AccountDetailsDto toAccount = accountClient.getAccountDetails(toAccountId);
-        PaymentDto payment = new PaymentDto(
-                fromAccount.getAccountNumber(),
-                toAccount.getAccountNumber(),
-                amount,
-                amount,
-                BigDecimal.ZERO,
-                orderOwnerId(fromAccount)
-        );
-        // Route by ownership: account-service /transaction rejects same-owner pairs and /transfer
-        // rejects different-owner pairs. Settlement legs that move funds between two bank-owned
-        // accounts (e.g. bank's funding account to bank's commission account) must therefore go
-        // through /transfer, while client-to-bank settlements continue to use /transaction.
-        Long fromOwner = fromAccount.getOwnerId();
-        Long toOwner = toAccount.getOwnerId();
-        if (fromOwner != null && fromOwner.equals(toOwner)) {
-            accountClient.transfer(payment);
-            return;
-        }
-        accountClient.transaction(payment);
-    }
-
-    private void transferForClient(Long fromAccountId, Long toAccountId, BigDecimal amount, String currency, String description) {
-        AccountDetailsDto fromAccount = accountClient.getAccountDetails(fromAccountId);
-        if (fromAccount.getCurrency() == null || fromAccount.getCurrency().equalsIgnoreCase(currency)) {
-            transferWithoutConversionFee(fromAccountId, toAccountId, amount, currency, description);
-            return;
-        }
-
-        // Account currency differs from listing currency: convert the trade amount to the account's currency,
-        // then pay the bank account that matches the client's currency directly.
-        ExchangeRateDto conversion = exchangeClient.calculate(currency, fromAccount.getCurrency(), amount);
-        BigDecimal convertedAmount = conversion.getConvertedAmount() == null ? amount : conversion.getConvertedAmount();
-        BankAccountDto fromCurrencyBank = employeeClient.getBankAccount(fromAccount.getCurrency());
-        transferWithoutConversionFee(fromAccountId, fromCurrencyBank.getAccountId(), convertedAmount, fromAccount.getCurrency(), description);
-    }
-
-    private Long orderOwnerId(AccountDetailsDto account) {
-        return account.getOwnerId() == null ? 0L : account.getOwnerId();
     }
 
     private int defaultInteger(Integer value) {

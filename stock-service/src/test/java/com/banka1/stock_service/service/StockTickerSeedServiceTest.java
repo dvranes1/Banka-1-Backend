@@ -75,11 +75,14 @@ class StockTickerSeedServiceTest {
         assertThat(appleListing.getTicker()).isEqualTo("AAPL");
         assertThat(appleListing.getName()).isEqualTo("Apple Inc.");
         assertThat(appleListing.getLastRefresh()).isCloseTo(LocalDateTime.now(), within(5, ChronoUnit.SECONDS));
-        assertThat(appleListing.getPrice()).isEqualByComparingTo("0.00000000");
-        assertThat(appleListing.getAsk()).isEqualByComparingTo("0.00000000");
-        assertThat(appleListing.getBid()).isEqualByComparingTo("0.00000000");
-        assertThat(appleListing.getChange()).isEqualByComparingTo("0.00000000");
-        assertThat(appleListing.getVolume()).isZero();
+        // GHI #199 follow-up: starter listings se sada seeduju sa fallback mid-market cenama
+        // (Apple ~$180) tako da manuel testiranje radi cak i kada Alpha Vantage refresh nije
+        // uspeo. Realni quote overrride-uje ove vrednosti pri prvom uspesnom refresh-u.
+        assertThat(appleListing.getPrice()).isEqualByComparingTo("180.00000000");
+        assertThat(appleListing.getAsk()).isEqualByComparingTo("180.05000000");
+        assertThat(appleListing.getBid()).isEqualByComparingTo("179.95000000");
+        assertThat(appleListing.getChange()).isEqualByComparingTo("0");
+        assertThat(appleListing.getVolume()).isEqualTo(50_000_000L);
     }
 
     @Test

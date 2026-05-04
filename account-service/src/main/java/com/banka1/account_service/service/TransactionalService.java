@@ -36,5 +36,22 @@ public interface TransactionalService {
 
     void transfer(Account sender, Account recipient, BankPaymentDto paymentDto);
 
+    /**
+     * Atomicno skida zadati iznos sa racuna (jednostrani debit, bez kontra-strane).
+     * Validira saldo i dnevne/mesecne limite kao i klasicni debit.
+     *
+     * @param account racun nad kojim se izvodi operacija
+     * @param amount iznos za skidanje (mora biti > 0)
+     * @return azurirano stanje istog racuna posle operacije
+     */
+    UpdatedBalanceResponseDto withdrawOneSided(Account account, BigDecimal amount);
 
+    /**
+     * Atomicno dodaje zadati iznos na racun (jednostrani credit, bez kontra-strane).
+     *
+     * @param account racun nad kojim se izvodi operacija
+     * @param amount iznos za dodavanje (mora biti > 0)
+     * @return azurirano stanje istog racuna posle operacije
+     */
+    UpdatedBalanceResponseDto depositOneSided(Account account, BigDecimal amount);
 }

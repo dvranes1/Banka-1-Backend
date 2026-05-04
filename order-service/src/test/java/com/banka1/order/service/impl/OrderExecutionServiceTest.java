@@ -8,6 +8,7 @@ import com.banka1.order.dto.AccountDetailsDto;
 import com.banka1.order.dto.BankAccountDto;
 import com.banka1.order.dto.ExchangeRateDto;
 import com.banka1.order.dto.StockListingDto;
+import com.banka1.order.dto.client.OneSidedTransactionDto;
 import com.banka1.order.dto.client.PaymentDto;
 import com.banka1.order.entity.ActuaryInfo;
 import com.banka1.order.entity.Order;
@@ -203,10 +204,14 @@ class OrderExecutionServiceTest {
         assertThat(transactionCaptor.getValue().getPricePerUnit()).isEqualByComparingTo("101.00");
         assertThat(transactionCaptor.getValue().getTotalPrice()).isEqualByComparingTo("202.00");
 
-        ArgumentCaptor<PaymentDto> transferCaptor = ArgumentCaptor.forClass(PaymentDto.class);
-        verify(accountClient).transaction(transferCaptor.capture());
-        assertThat(transferCaptor.getValue().getFromAccountNumber()).isEqualTo("1110001400000000221");
-        assertThat(transferCaptor.getValue().getToAccountNumber()).isEqualTo("1110001000000000023");
+        // GHI #199: trade leg goes through one-sided exchangeBuy (no bank counterparty);
+        // the legacy /transaction call must NOT happen for the trade amount.
+        ArgumentCaptor<OneSidedTransactionDto> exchangeCaptor = ArgumentCaptor.forClass(OneSidedTransactionDto.class);
+        verify(accountClient).exchangeBuy(exchangeCaptor.capture());
+        assertThat(exchangeCaptor.getValue().getAccountNumber()).isEqualTo("1110001400000000221");
+        assertThat(exchangeCaptor.getValue().getAmount()).isEqualByComparingTo("202.00");
+        assertThat(exchangeCaptor.getValue().getClientId()).isEqualTo(1L);
+        verify(accountClient, never()).transaction(any(PaymentDto.class));
         assertThat(order.getStatus()).isEqualTo(OrderStatus.DONE);
         assertThat(order.getIsDone()).isTrue();
     }
@@ -265,7 +270,8 @@ class OrderExecutionServiceTest {
 
         assertThat(staleOrder.getRemainingPortions()).isEqualTo(5);
         assertThat(lockedOrder.getRemainingPortions()).isZero();
-        verify(accountClient).transaction(any(PaymentDto.class));
+        verify(accountClient).exchangeBuy(any(OneSidedTransactionDto.class));
+        verify(accountClient, never()).transaction(any(PaymentDto.class));
         verify(transactionRepository).save(any(Transaction.class));
     }
 
@@ -376,10 +382,26 @@ class OrderExecutionServiceTest {
         service.executeOrderPortion(order);
 
         verify(portfolioRepository, atLeastOnce()).save(portfolio);
-        ArgumentCaptor<PaymentDto> captor = ArgumentCaptor.forClass(PaymentDto.class);
-        verify(accountClient).transaction(captor.capture());
-        assertThat(captor.getValue().getFromAccountNumber()).isEqualTo("1110001000000000023");
-        assertThat(captor.getValue().getToAccountNumber()).isEqualTo("1110001400000000221");
+        // GHI #199: SELL credits the trader's account via one-sided exchangeSell;
+        // the bank account is never debited for the proceeds.
+        ArgumentCaptor<OneSidedTransactionDto> captor = ArgumentCaptor.forClass(OneSidedTransactionDto.class);
+        verify(accountClient).exchangeSell(captor.capture());
+        assertThat(captor.getValue().getAccountNumber()).isEqualTo("1110001400000000221");
+        assertThat(captor.getValue().getClientId()).isEqualTo(1L);
+        verify(accountClient, never()).transaction(any(PaymentDto.class));
+    }
+
+    @Test
+    void forexBuyExecution_doesNotCreatePortfolioEntry() {
+        // GHI #199 follow-up (alukic7): FOREX trade is a currency swap, not a position; the
+        // updatePortfolio path must early-return so we do not store a "holding" of the pair.
+        // The trade leg (one-sided debit) still happens against the trader's account.
+        listing.setListingType(ListingType.FOREX);
+
+        service.executeOrderPortion(order);
+
+        verify(portfolioRepository, never()).save(any(Portfolio.class));
+        verify(accountClient).exchangeBuy(any(OneSidedTransactionDto.class));
     }
 
     @Test
@@ -399,6 +421,10 @@ class OrderExecutionServiceTest {
 
         service.executeOrderPortion(order);
 
+        // For actuary BUY the funding account already IS the bank's own account, so the
+        // trade leg is a no-op: no exchangeBuy/Sell and no legacy transaction either.
+        verify(accountClient, never()).exchangeBuy(any(OneSidedTransactionDto.class));
+        verify(accountClient, never()).exchangeSell(any(OneSidedTransactionDto.class));
         verify(accountClient, never()).transaction(any(PaymentDto.class));
     }
 

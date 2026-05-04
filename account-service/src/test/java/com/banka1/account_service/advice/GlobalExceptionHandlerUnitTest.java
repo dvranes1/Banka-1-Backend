@@ -14,6 +14,8 @@ import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.authorization.AuthorizationDecision;
 
 import java.lang.reflect.Method;
 import java.util.NoSuchElementException;
@@ -43,6 +45,21 @@ class GlobalExceptionHandlerUnitTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getErrorCode()).isEqualTo("ERR_VALIDATION");
+    }
+
+    @Test
+    void handleAuthorizationDeniedMapsToForbidden() {
+        // Spring Security 6.x throws AuthorizationDeniedException at PreAuthorize failure.
+        // It is NOT a subclass of legacy AccessDeniedException, so without an explicit handler
+        // it falls through to the generic 500 path and the frontend sees "Serverska greska"
+        // for what is actually an auth problem (GHI #199 follow-up).
+        AuthorizationDeniedException ex = new AuthorizationDeniedException(
+                "denied", new AuthorizationDecision(false));
+
+        ResponseEntity<ErrorResponseDto> response = handler.handleAuthorizationDenied(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody().getErrorCode()).isEqualTo("ERR_FORBIDDEN");
     }
 
     @Test

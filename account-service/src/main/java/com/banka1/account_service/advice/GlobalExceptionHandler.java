@@ -9,6 +9,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.FieldError;
@@ -147,6 +148,22 @@ public class GlobalExceptionHandler {
                 "ERR_FORBIDDEN",
                 "Pristup odbijen",
                 "Nemate dozvolu za ovu akciju."
+        );
+        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * Spring Security 6.x baca {@link AuthorizationDeniedException} pri @PreAuthorize/role
+     * neuspehu i to NIJE podklasa starije {@link AccessDeniedException}, pa generic Exception
+     * fallback ranije pretvara u 500. Ovde se mapira na 403, sto frontend pravilno
+     * prikazuje kao auth problem umesto serverske greske.
+     */
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ErrorResponseDto> handleAuthorizationDenied(AuthorizationDeniedException ex) {
+        ErrorResponseDto error = new ErrorResponseDto(
+                "ERR_FORBIDDEN",
+                "Pristup odbijen",
+                "Nedovoljne privilegije za ovu akciju."
         );
         return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
     }

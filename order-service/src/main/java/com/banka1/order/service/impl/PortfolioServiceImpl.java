@@ -235,6 +235,12 @@ public class PortfolioServiceImpl implements PortfolioService {
 
         PortfolioResponse response = new PortfolioResponse();
 
+        // GHI #199: expose the portfolio PK and the underlying listingId so the
+        // frontend can wire actions that operate on the holding (Sell flow,
+        // public-quantity update, option exercise) and stop falling back to the
+        // disabled-button state described in PortfolioController hasPortfolioActionId.
+        response.setId(portfolio.getId());
+        response.setListingId(portfolio.getListingId());
         response.setListingType(portfolio.getListingType());
         response.setQuantity(portfolio.getQuantity());
         response.setPublicQuantity(portfolio.getPublicQuantity());

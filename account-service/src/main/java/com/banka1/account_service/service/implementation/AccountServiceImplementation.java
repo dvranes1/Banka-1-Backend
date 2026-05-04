@@ -4,6 +4,7 @@ import com.banka1.account_service.domain.Account;
 import com.banka1.account_service.domain.enums.CurrencyCode;
 import com.banka1.account_service.domain.enums.Status;
 import com.banka1.account_service.dto.request.BankPaymentDto;
+import com.banka1.account_service.dto.request.OneSidedTransactionDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 import com.banka1.account_service.dto.response.InfoResponseDto;
 import com.banka1.account_service.dto.response.InternalAccountDetailsDto;
@@ -188,6 +189,38 @@ public class AccountServiceImplementation implements AccountService {
         if (account == null)
             throw new NoSuchElementException("Ne postoji drzavni racun za valutu:" + currencyCode);
         return InternalAccountDetailsDto.from(account);
+    }
+
+    @Override
+    public UpdatedBalanceResponseDto exchangeBuy(OneSidedTransactionDto dto) {
+        Account account = validate(dto.getAccountNumber());
+        if (dto.getClientId() == null)
+            throw new IllegalArgumentException("Unesi id clienta");
+        if (!account.getVlasnik().equals(dto.getClientId()))
+            throw new IllegalArgumentException("Nisi vlasnik racuna");
+        for (int i = 0; true; i++) {
+            try {
+                return transactionalService.withdrawOneSided(account, dto.getAmount());
+            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException e) {
+                if (i >= 2) throw e;
+            }
+        }
+    }
+
+    @Override
+    public UpdatedBalanceResponseDto exchangeSell(OneSidedTransactionDto dto) {
+        Account account = validate(dto.getAccountNumber());
+        if (dto.getClientId() == null)
+            throw new IllegalArgumentException("Unesi id clienta");
+        if (!account.getVlasnik().equals(dto.getClientId()))
+            throw new IllegalArgumentException("Nisi vlasnik racuna");
+        for (int i = 0; true; i++) {
+            try {
+                return transactionalService.depositOneSided(account, dto.getAmount());
+            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException e) {
+                if (i >= 2) throw e;
+            }
+        }
     }
 
     @Override

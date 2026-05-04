@@ -540,6 +540,27 @@ class OrderCreationServiceTest {
     }
 
     @Test
+    void createSellOrder_rejectsForexBecauseFxIsCurrencyConversionNotAPosition() {
+        // GHI #199 follow-up: FX pair is a currency swap so there is no Portfolio entry to sell;
+        // SELL flow must reject up-front rather than fall through to "Portfolio position not
+        // found". Test as actuary because clients are already blocked earlier in
+        // validateTradingAccess (per Celina 3, klijenti trguju samo stocks + futures).
+        StockListingDto forexListing = new StockListingDto();
+        forexListing.setId(42L);
+        forexListing.setListingType(ListingType.FOREX);
+        forexListing.setCurrency("USD");
+        forexListing.setContractSize(1000);
+        forexListing.setPrice(new BigDecimal("1.0850"));
+        forexListing.setBid(new BigDecimal("1.0840"));
+        forexListing.setAsk(new BigDecimal("1.0860"));
+        when(stockClient.getListing(42L)).thenReturn(forexListing);
+
+        assertThatThrownBy(() -> service.createSellOrder(actuaryUser, sellRequest))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Forex");
+    }
+
+    @Test
     void confirmMarginSell_rejectsWhenUserLacksMarginPermission() {
         Portfolio portfolio = new Portfolio();
         portfolio.setUserId(1L);

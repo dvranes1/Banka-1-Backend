@@ -362,10 +362,12 @@ class ListingQueryServiceImplTest {
 
         assertThat(response.listingId()).isEqualTo(seededListing.getId());
         assertThat(response.ticker()).isEqualTo("AAPL");
-        assertThat(response.price()).isEqualByComparingTo("0.00000000");
-        assertThat(response.change()).isEqualByComparingTo("0.00000000");
-        assertThat(response.changePercent()).isNull();
-        assertThat(response.dollarVolume()).isEqualByComparingTo("0E-8");
+        // GHI #199 follow-up: starter listings sada nose fallback mid-market cene
+        // (vidi StockTickerSeedService); change ostaje 0 dok ne stigne prvi refresh,
+        // pa je changePercent definisan i jednak 0 (price=180, change=0, previous=180).
+        assertThat(response.price()).isEqualByComparingTo("180.00000000");
+        assertThat(response.change()).isEqualByComparingTo("0");
+        assertThat(response.changePercent()).isEqualByComparingTo("0.0000");
         assertThat(response.priceHistory()).isEmpty();
     }
 

@@ -1,6 +1,7 @@
 package com.banka1.account_service.service;
 
 import com.banka1.account_service.dto.request.BankPaymentDto;
+import com.banka1.account_service.dto.request.OneSidedTransactionDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 
 import com.banka1.account_service.domain.enums.CurrencyCode;
@@ -83,4 +84,28 @@ public interface AccountService {
      * @return DTO sa detaljima drzavnog racuna
      */
     InternalAccountDetailsDto getStateAccountDetails(CurrencyCode currencyCode);
+
+    /**
+     * Jednostrana debit operacija (BUY settlement). Skida zadati iznos sa racuna
+     * bez kontra-strane. Po direktivi PM-a u GHI #199, iznos berzanske kupovine
+     * ne sme da bude kreditiran banci, pa se trade leg izvrsava ovim putem;
+     * provizija (commission) i dalje ide na bankin racun klasicnom transakcijom.
+     *
+     * @param dto podaci o operaciji (broj racuna, iznos, ID klijenta, opis)
+     * @return azurirano stanje racuna posle skidanja
+     * @throws IllegalArgumentException ako racun ne postoji ili klijent nije vlasnik
+     * @throws com.banka1.account_service.exception.BusinessException ako nema sredstava
+     */
+    UpdatedBalanceResponseDto exchangeBuy(OneSidedTransactionDto dto);
+
+    /**
+     * Jednostrana credit operacija (SELL settlement). Dodaje zadati iznos na racun
+     * bez kontra-strane. Simetricna operacija sa {@link #exchangeBuy(OneSidedTransactionDto)};
+     * pretpostavlja se da bankin racun ne sluzi kao izvor sredstava za isplatu prodaje.
+     *
+     * @param dto podaci o operaciji (broj racuna, iznos, ID klijenta, opis)
+     * @return azurirano stanje racuna posle dodavanja
+     * @throws IllegalArgumentException ako racun ne postoji ili klijent nije vlasnik
+     */
+    UpdatedBalanceResponseDto exchangeSell(OneSidedTransactionDto dto);
 }

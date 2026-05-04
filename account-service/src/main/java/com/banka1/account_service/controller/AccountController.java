@@ -2,6 +2,7 @@ package com.banka1.account_service.controller;
 
 import com.banka1.account_service.domain.enums.CurrencyCode;
 import com.banka1.account_service.dto.request.BankPaymentDto;
+import com.banka1.account_service.dto.request.OneSidedTransactionDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 import com.banka1.account_service.dto.response.InfoResponseDto;
 import com.banka1.account_service.dto.response.InternalAccountDetailsDto;
@@ -110,6 +111,36 @@ public class AccountController {
     @PostMapping("/transfer")
     public ResponseEntity<UpdatedBalanceResponseDto> transfer(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid PaymentDto paymentDto) {
         return new ResponseEntity<>(accountService.transfer(paymentDto),HttpStatus.OK);
+    }
+
+    /**
+     * Jednostrana operacija skidanja sredstava sa zadatog racuna (BUY settlement).
+     * <p>
+     * Koristi se kada iznos berzanske kupovine treba samo skinuti sa korisnikovog
+     * racuna, bez kontra-strane (izricita PM direktiva u GHI #199 da
+     * <i>banci ne ide novac</i> za trade leg). Provizija se i dalje prebacuje
+     * klasicnim {@code /transaction} ili {@code /transfer} putem.
+     *
+     * @param dto podaci o operaciji (broj racuna, iznos, ID klijenta, opis)
+     * @return {@link UpdatedBalanceResponseDto} sa azuriranim stanjem racuna
+     */
+    @PostMapping("/exchange/buy")
+    public ResponseEntity<UpdatedBalanceResponseDto> exchangeBuy(@AuthenticationPrincipal Jwt jwt,
+                                                                  @RequestBody @Valid OneSidedTransactionDto dto) {
+        return new ResponseEntity<>(accountService.exchangeBuy(dto), HttpStatus.OK);
+    }
+
+    /**
+     * Jednostrana operacija dodavanja sredstava na zadati racun (SELL settlement).
+     * Simetricna operacija sa {@link #exchangeBuy(Jwt, OneSidedTransactionDto)}.
+     *
+     * @param dto podaci o operaciji (broj racuna, iznos, ID klijenta, opis)
+     * @return {@link UpdatedBalanceResponseDto} sa azuriranim stanjem racuna
+     */
+    @PostMapping("/exchange/sell")
+    public ResponseEntity<UpdatedBalanceResponseDto> exchangeSell(@AuthenticationPrincipal Jwt jwt,
+                                                                   @RequestBody @Valid OneSidedTransactionDto dto) {
+        return new ResponseEntity<>(accountService.exchangeSell(dto), HttpStatus.OK);
     }
 
     /**

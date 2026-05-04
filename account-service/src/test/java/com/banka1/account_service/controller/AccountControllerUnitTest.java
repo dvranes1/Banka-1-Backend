@@ -1,6 +1,7 @@
 package com.banka1.account_service.controller;
 
 import com.banka1.account_service.domain.enums.CurrencyCode;
+import com.banka1.account_service.dto.request.OneSidedTransactionDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 import com.banka1.account_service.dto.response.InfoResponseDto;
 import com.banka1.account_service.dto.response.InternalAccountDetailsDto;
@@ -117,6 +118,36 @@ class AccountControllerUnitTest {
                 .hasMessageContaining("RSD");
 
         verify(accountService, never()).getStateAccountDetails(any());
+    }
+
+    @Test
+    void exchangeBuyDelegatesToServiceAndReturnsOk() {
+        AccountController controller = new AccountController(accountService);
+        OneSidedTransactionDto dto = new OneSidedTransactionDto(
+                "1110001400000000221", new BigDecimal("202.00"), 1L, "Order execution");
+        UpdatedBalanceResponseDto expected = new UpdatedBalanceResponseDto(new BigDecimal("9798"), new BigDecimal("9798"));
+        when(accountService.exchangeBuy(dto)).thenReturn(expected);
+
+        ResponseEntity<UpdatedBalanceResponseDto> response = controller.exchangeBuy(null, dto);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(expected);
+        verify(accountService).exchangeBuy(dto);
+    }
+
+    @Test
+    void exchangeSellDelegatesToServiceAndReturnsOk() {
+        AccountController controller = new AccountController(accountService);
+        OneSidedTransactionDto dto = new OneSidedTransactionDto(
+                "1110001400000000221", new BigDecimal("198.00"), 1L, "Order execution");
+        UpdatedBalanceResponseDto expected = new UpdatedBalanceResponseDto(new BigDecimal("10198"), new BigDecimal("10198"));
+        when(accountService.exchangeSell(dto)).thenReturn(expected);
+
+        ResponseEntity<UpdatedBalanceResponseDto> response = controller.exchangeSell(null, dto);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(expected);
+        verify(accountService).exchangeSell(dto);
     }
 
     private PaymentDto paymentDto() {

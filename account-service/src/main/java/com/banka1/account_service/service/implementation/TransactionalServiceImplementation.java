@@ -110,5 +110,19 @@ public class TransactionalServiceImplementation implements TransactionalService 
         //return new UpdatedBalanceResponseDto(null,null);
     }
 
+    @Transactional
+    @Override
+    public UpdatedBalanceResponseDto withdrawOneSided(Account account, BigDecimal amount) {
+        debit(account, amount);
+        return new UpdatedBalanceResponseDto(account.getStanje(), account.getStanje());
+    }
+
+    @Transactional
+    @Override
+    public UpdatedBalanceResponseDto depositOneSided(Account account, BigDecimal amount) {
+        credit(account, amount);
+        return new UpdatedBalanceResponseDto(account.getStanje(), account.getStanje());
+    }
+
 
 }

@@ -133,6 +133,15 @@ public class OrderCreationServiceImpl implements OrderCreationService {
 
         StockListingDto listing = stockClient.getListing(request.getListingId());
         validateTradingAccess(user, listing);
+        // FOREX is a currency swap, not a position-taking trade -- there is no Portfolio entry to
+        // sell from (see updatePortfolio early-return in OrderExecutionServiceImpl). Reject here
+        // with a clear error rather than letting the caller hit a confusing "Portfolio position
+        // not found" later in confirmOrder.
+        ListingType listingType = listing.getListingType() == null ? ListingType.STOCK : listing.getListingType();
+        if (listingType == ListingType.FOREX) {
+            throw new BadRequestException("Forex pari se ne mogu prodavati kao hartije od vrednosti; FX trgovina je "
+                    + "konverzija valuta, ne pozicija u portfoliju.");
+        }
         ensurePortfolioOwnership(user.userId(), request.getListingId(), request.getQuantity());
         ExchangeWindow exchangeWindow = resolveExchangeWindow(listing);
         OrderType orderType = determineOrderType(request.getLimitValue(), request.getStopValue());

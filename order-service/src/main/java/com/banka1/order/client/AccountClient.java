@@ -2,6 +2,7 @@ package com.banka1.order.client;
 
 import com.banka1.order.dto.AccountDetailsDto;
 import com.banka1.order.dto.AccountTransactionRequest;
+import com.banka1.order.dto.client.OneSidedTransactionDto;
 import com.banka1.order.dto.client.PaymentDto;
 import com.banka1.order.dto.response.UpdatedBalanceResponseDto;
 
@@ -72,4 +73,25 @@ public interface AccountClient {
      * @return updated balances after the transfer
      */
     UpdatedBalanceResponseDto transaction(PaymentDto payment);
+
+    /**
+     * One-sided exchange BUY settlement: debit the trader's account by the listed
+     * amount without crediting any bank account. Per issue #199 the trade leg of an
+     * exchange purchase must not flow into the bank's books; this method enforces
+     * that contract on the order-service side.
+     *
+     * @param request account number, amount in account currency, owner id, and audit description
+     * @return updated balance after the debit
+     */
+    UpdatedBalanceResponseDto exchangeBuy(OneSidedTransactionDto request);
+
+    /**
+     * One-sided exchange SELL settlement: credit the trader's account by the listed
+     * amount without debiting any bank account. Symmetric counterpart to
+     * {@link #exchangeBuy(OneSidedTransactionDto)}.
+     *
+     * @param request account number, amount in account currency, owner id, and audit description
+     * @return updated balance after the credit
+     */
+    UpdatedBalanceResponseDto exchangeSell(OneSidedTransactionDto request);
 }

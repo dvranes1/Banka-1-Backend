@@ -127,6 +127,12 @@ class PortfolioServiceTest {
         assertThat(result.getHoldings().get(0).getAveragePurchasePrice()).isEqualByComparingTo("100");
         assertThat(result.getHoldings().get(0).getProfit()).isEqualByComparingTo("500");
         assertThat(result.getHoldings().get(0).getPublicQuantity()).isEqualTo(2);
+        // GHI #199: portfolio id and listingId must surface on the response so the front
+        // can wire actions (Sell button navigation, public-quantity update, exercise).
+        assertThat(result.getHoldings().get(0).getId()).isEqualTo(1L);
+        assertThat(result.getHoldings().get(0).getListingId()).isEqualTo(100L);
+        assertThat(result.getHoldings().get(1).getId()).isEqualTo(2L);
+        assertThat(result.getHoldings().get(1).getListingId()).isEqualTo(200L);
         assertThat(result.getHoldings().get(1).getAveragePurchasePrice()).isEqualByComparingTo("12");
         assertThat(result.getHoldings().get(1).getExercisable()).isTrue();
         assertThat(result.getTotalProfit()).isEqualByComparingTo("876");

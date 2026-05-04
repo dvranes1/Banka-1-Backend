@@ -29,6 +29,23 @@ import java.time.LocalDateTime;
 @Data
 public class PortfolioResponse {
 
+    /**
+     * Database primary key of this portfolio entry. Required by the frontend so it
+     * can address actions that operate on the holding itself (set-public-quantity,
+     * exercise-option, etc.). Was missing from earlier responses and the front had
+     * to disable the corresponding controls; see GHI #199.
+     */
+    private Long id;
+
+    /**
+     * Identifier of the underlying listing (security) held by this portfolio entry.
+     * Needed by the frontend to navigate from "Moj Portfolio" into the SELL flow
+     * (Create Order with direction=SELL pre-filled). Without it the Sell button
+     * cannot link back to the listing and silently does nothing -- the bug PM
+     * raised in GHI #199.
+     */
+    private Long listingId;
+
     /** Type of security held: STOCK, FUTURES, FOREX, or OPTION. */
     private ListingType listingType;
 

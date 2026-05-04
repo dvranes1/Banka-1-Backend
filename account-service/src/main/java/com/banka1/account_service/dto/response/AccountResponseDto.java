@@ -23,6 +23,16 @@ import java.math.BigDecimal;
 @Getter
 @Setter
 public class AccountResponseDto {
+    /**
+     * Primarni kljuc racuna u bazi. Frontend i drugi servisi koriste ovu vrednost kao
+     * jedinstveni numericki identifikator (npr. order-service prosledjuje ga kao
+     * {@code accountId} u BUY/SELL request body-ju). Bez ovog polja, frontend je
+     * morao da hash-uje {@code brojRacuna} u 32-bit integer da bi imao "id", sto je
+     * proizvodilo vrednosti koje ne mapiraju ni na PK ni na broj racuna i rusilo
+     * naredne {@code /internal/accounts/id/...} pozive (vidi GHI #199).
+     */
+    private Long id;
+
     /** Naziv koji je korisnik dao za svoj račun. */
     private String nazivRacuna;
 
@@ -52,6 +62,7 @@ public class AccountResponseDto {
      * @param account entitet iz baze
      */
     public AccountResponseDto(Account account) {
+        this.id = account.getId();
         this.nazivRacuna = account.getNazivRacuna();
         this.brojRacuna = account.getBrojRacuna();
         this.raspolozivoStanje = account.getRaspolozivoStanje();

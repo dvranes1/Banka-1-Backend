@@ -37,24 +37,31 @@ import java.util.List;
 public class StockTickerSeedService {
 
     private static final String SOURCE = "built-in starter stock tickers";
-    private static final BigDecimal ZERO_PRICE = new BigDecimal("0.00000000");
     private static final BigDecimal ZERO_DIVIDEND_YIELD = new BigDecimal("0.0000");
     private static final long ZERO_OUTSTANDING_SHARES = 0L;
-    private static final long ZERO_VOLUME = 0L;
+    private static final long DEFAULT_VOLUME = 50_000_000L;
+    /**
+     * Approximate mid-market spreads applied to {@code price} so newly seeded listings have
+     * usable bid/ask values without depending on the upstream market-data refresh succeeding.
+     * Without this, freshly seeded listings sit at price=ask=bid=0 until Alpha Vantage refresh
+     * runs successfully, which is unreliable in a sandboxed dev environment.
+     */
+    private static final BigDecimal ASK_SPREAD = new BigDecimal("0.05000000");
+    private static final BigDecimal BID_SPREAD = new BigDecimal("0.05000000");
     private static final List<SeededStockRow> DEFAULT_STOCKS = List.of(
             // Nasdaq (XNAS)
-            new SeededStockRow("AAPL", "Apple Inc.", "XNAS"),
-            new SeededStockRow("MSFT", "Microsoft Corporation", "XNAS"),
-            new SeededStockRow("GOOGL", "Alphabet Inc. Class A", "XNAS"),
-            new SeededStockRow("AMZN", "Amazon.com, Inc.", "XNAS"),
-            new SeededStockRow("TSLA", "Tesla, Inc.", "XNAS"),
-            // New York Portfolio Clearing (NYPC) — exchange acronym and MIC start with "NY"
-            new SeededStockRow("IBM", "International Business Machines Corp.", "NYPC"),
-            new SeededStockRow("GS", "Goldman Sachs Group Inc.", "NYPC"),
-            new SeededStockRow("JPM", "JPMorgan Chase & Co.", "NYPC"),
+            new SeededStockRow("AAPL", "Apple Inc.", "XNAS", new BigDecimal("180.00000000")),
+            new SeededStockRow("MSFT", "Microsoft Corporation", "XNAS", new BigDecimal("420.00000000")),
+            new SeededStockRow("GOOGL", "Alphabet Inc. Class A", "XNAS", new BigDecimal("165.00000000")),
+            new SeededStockRow("AMZN", "Amazon.com, Inc.", "XNAS", new BigDecimal("185.00000000")),
+            new SeededStockRow("TSLA", "Tesla, Inc.", "XNAS", new BigDecimal("260.00000000")),
+            // New York Portfolio Clearing (NYPC)
+            new SeededStockRow("IBM", "International Business Machines Corp.", "NYPC", new BigDecimal("210.00000000")),
+            new SeededStockRow("GS", "Goldman Sachs Group Inc.", "NYPC", new BigDecimal("450.00000000")),
+            new SeededStockRow("JPM", "JPMorgan Chase & Co.", "NYPC", new BigDecimal("210.00000000")),
             // Chicago Mercantile Exchange (XCME)
-            new SeededStockRow("WMT", "Walmart Inc.", "XCME"),
-            new SeededStockRow("BAC", "Bank of America Corp.", "XCME")
+            new SeededStockRow("WMT", "Walmart Inc.", "XCME", new BigDecimal("70.00000000")),
+            new SeededStockRow("BAC", "Bank of America Corp.", "XCME", new BigDecimal("40.00000000"))
     );
 
     private final StockRepository stockRepository;
@@ -99,7 +106,7 @@ public class StockTickerSeedService {
             Listing listing = listingRepository.findByListingTypeAndSecurityId(ListingType.STOCK, stock.getId())
                     .orElse(null);
             if (listing == null) {
-                listingRepository.save(createListing(stock, exchange));
+                listingRepository.save(createListing(row, stock, exchange));
                 rowCreated = true;
             }
 
@@ -135,13 +142,17 @@ public class StockTickerSeedService {
     }
 
     /**
-     * Creates a placeholder listing row linked to an already persisted stock.
+     * Creates a placeholder listing row linked to an already persisted stock with sane fallback
+     * mid-market price/ask/bid/volume so manual exchange testing works even without a successful
+     * upstream Alpha Vantage refresh. Once {@code refresh-market-data} runs successfully, these
+     * placeholder values are overwritten by real quotes.
      *
+     * @param row seed row carrying the per-ticker fallback price
      * @param stock persisted stock entity
      * @param stockExchange exchange used for the starter listing
      * @return new listing entity
      */
-    private Listing createListing(Stock stock, StockExchange stockExchange) {
+    private Listing createListing(SeededStockRow row, Stock stock, StockExchange stockExchange) {
         Listing listing = new Listing();
         listing.setSecurityId(stock.getId());
         listing.setListingType(ListingType.STOCK);
@@ -149,11 +160,12 @@ public class StockTickerSeedService {
         listing.setTicker(stock.getTicker());
         listing.setName(stock.getName());
         listing.setLastRefresh(LocalDateTime.now());
-        listing.setPrice(ZERO_PRICE);
-        listing.setAsk(ZERO_PRICE);
-        listing.setBid(ZERO_PRICE);
-        listing.setChange(ZERO_PRICE);
-        listing.setVolume(ZERO_VOLUME);
+        BigDecimal price = row.price();
+        listing.setPrice(price);
+        listing.setAsk(price.add(ASK_SPREAD));
+        listing.setBid(price.subtract(BID_SPREAD));
+        listing.setChange(BigDecimal.ZERO);
+        listing.setVolume(DEFAULT_VOLUME);
         return listing;
     }
 
@@ -162,11 +174,14 @@ public class StockTickerSeedService {
      *
      * @param ticker unique stock ticker
      * @param name display name
+     * @param exchangeMicCode MIC code of the exchange the listing belongs to
+     * @param price mid-market starter price; ask/bid are derived with a small spread
      */
     private record SeededStockRow(
             String ticker,
             String name,
-            String exchangeMicCode
+            String exchangeMicCode,
+            BigDecimal price
     ) {
     }
 }
