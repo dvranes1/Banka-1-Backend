@@ -124,6 +124,7 @@ public class TransactionalServiceImplementation implements TransactionalService 
     public UpdatedBalanceResponseDto depositOneSided(Account account, BigDecimal amount) {
         credit(account, amount);
         return new UpdatedBalanceResponseDto(account.getStanje(), account.getStanje());
+    }
     public void creditTransactional(Account account, BigDecimal amount)
     {
         credit(account,amount);
