@@ -11,12 +11,26 @@
 -- Rates are anchored to 2026-05-04 (project current date) and use mid-market values that
 -- are realistic enough for fixture trading; replace with live data via /rates/fetch.
 
-INSERT INTO exchange_rate (currency_code, buying_rate, selling_rate, rate_date) VALUES
-    ('EUR', 117.00000000, 117.50000000, '2026-05-04'),
-    ('CHF', 119.00000000, 119.50000000, '2026-05-04'),
-    ('USD', 108.00000000, 108.50000000, '2026-05-04'),
-    ('GBP', 137.00000000, 137.50000000, '2026-05-04'),
-    ('JPY',   0.69000000,   0.70000000, '2026-05-04'),
-    ('CAD',  79.00000000,  79.50000000, '2026-05-04'),
-    ('AUD',  72.00000000,  72.50000000, '2026-05-04')
-ON CONFLICT (currency_code, rate_date) DO NOTHING;
+INSERT INTO exchange_rate (currency_code, buying_rate, selling_rate, rate_date)
+SELECT seed.currency_code, seed.buying_rate, seed.selling_rate, seed.rate_date
+FROM (
+    SELECT 'EUR' AS currency_code, 117.00000000 AS buying_rate, 117.50000000 AS selling_rate, DATE '2026-05-04' AS rate_date
+    UNION ALL
+    SELECT 'CHF', 119.00000000, 119.50000000, DATE '2026-05-04'
+    UNION ALL
+    SELECT 'USD', 108.00000000, 108.50000000, DATE '2026-05-04'
+    UNION ALL
+    SELECT 'GBP', 137.00000000, 137.50000000, DATE '2026-05-04'
+    UNION ALL
+    SELECT 'JPY', 0.69000000, 0.70000000, DATE '2026-05-04'
+    UNION ALL
+    SELECT 'CAD', 79.00000000, 79.50000000, DATE '2026-05-04'
+    UNION ALL
+    SELECT 'AUD', 72.00000000, 72.50000000, DATE '2026-05-04'
+) seed
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM exchange_rate existing
+    WHERE existing.currency_code = seed.currency_code
+      AND existing.rate_date = seed.rate_date
+);
