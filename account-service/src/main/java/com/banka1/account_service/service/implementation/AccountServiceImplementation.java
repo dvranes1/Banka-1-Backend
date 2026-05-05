@@ -1,6 +1,7 @@
 package com.banka1.account_service.service.implementation;
 
 import com.banka1.account_service.domain.Account;
+import com.banka1.account_service.domain.Currency;
 import com.banka1.account_service.domain.enums.CurrencyCode;
 import com.banka1.account_service.domain.enums.Status;
 import com.banka1.account_service.dto.request.BankPaymentDto;
@@ -10,6 +11,7 @@ import com.banka1.account_service.dto.response.InfoResponseDto;
 import com.banka1.account_service.dto.response.InternalAccountDetailsDto;
 import com.banka1.account_service.dto.response.UpdatedBalanceResponseDto;
 import com.banka1.account_service.repository.AccountRepository;
+import com.banka1.account_service.repository.CurrencyRepository;
 import com.banka1.account_service.service.AccountService;
 import com.banka1.account_service.service.TransactionalService;
 import jakarta.persistence.OptimisticLockException;
@@ -37,6 +39,8 @@ public class AccountServiceImplementation implements AccountService {
     private final TransactionalService transactionalService;
     /** Repozitorijum za pristup računima iz baze. */
     private final AccountRepository accountRepository;
+
+    private final CurrencyRepository currencyRepository;
 
     /**
      * Validira da račun postoji, ima ACTIVE status i nije istekao.
@@ -77,6 +81,20 @@ public class AccountServiceImplementation implements AccountService {
         return account;
     }
 
+    private Account validateBank(CurrencyCode currencyCode)
+    {
+        Currency currency=currencyRepository.findByOznaka(currencyCode).orElse(null);
+        if(currency==null)
+            throw new IllegalArgumentException("Ne postoji ovaj currency "+currencyCode);
+        Account account=accountRepository.findByVlasnikAndCurrency(-1L,currency).orElse(null);
+        if(account==null)
+            throw new IllegalStateException("Greska u sistemu fali banka");
+        if(account.getStatus()== Status.INACTIVE)
+            throw new IllegalStateException("Racun banke je neaktivan");
+        if(account.getDatumIsteka()!=null&&account.getDatumIsteka().isBefore(LocalDate.now()))
+            throw new IllegalStateException("Racun banke je istekao");
+        return account;
+    }
 
     /**
      * Izvršava transfer sa retry logikom za optimističke lock greške.
@@ -99,6 +117,43 @@ public class AccountServiceImplementation implements AccountService {
         for(int i = 0; true; i++) {
             try {
                 return transactionalService.transfer(from,to,bankSender,bankTarget,paymentDto);
+            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException optimisticLockException) {
+                if(i>=2)
+                    throw optimisticLockException;
+            }
+        }
+    }
+
+    @Override
+    public void creditBank(CreditBankDto creditBankDto) {
+        CurrencyCode currencyCode;
+        try
+        {
+            currencyCode=CurrencyCode.valueOf(creditBankDto.getCurrencyCode().toUpperCase());
+        }
+        catch (Exception e)
+        {
+            throw new IllegalArgumentException("Ne postoji ovaj currencyCode: "+creditBankDto.getCurrencyCode());
+        }
+        Account account=validateBank(currencyCode);
+        for(int i = 0; true; i++) {
+            try {
+                transactionalService.creditTransactional(account,creditBankDto.getAmount());
+                return;
+            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException optimisticLockException) {
+                if(i>=2)
+                    throw optimisticLockException;
+            }
+        }
+    }
+
+    @Override
+    public void creditAccount(CreditAccountDto creditAccountDto) {
+        Account account=validate(creditAccountDto.getAccountNumber());
+        for(int i = 0; true; i++) {
+            try {
+                transactionalService.creditTransactional(account,creditAccountDto.getAmount());
+                return;
             } catch (ObjectOptimisticLockingFailureException | OptimisticLockException optimisticLockException) {
                 if(i>=2)
                     throw optimisticLockException;

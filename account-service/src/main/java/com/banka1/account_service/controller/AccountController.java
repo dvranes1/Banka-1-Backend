@@ -64,6 +64,21 @@ public class AccountController {
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
+    @PostMapping("/credit")
+    public ResponseEntity<Void> credit(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid CreditAccountDto creditAccountDto)
+    {
+        accountService.creditAccount(creditAccountDto);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @PostMapping("/creditBank")
+    public ResponseEntity<Void> creditBank(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid CreditBankDto creditBankDto)
+    {
+        accountService.creditBank(creditBankDto);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+
     @GetMapping("/id/{accountId}/details")
     public ResponseEntity<InternalAccountDetailsDto> getAccountDetailsById(@AuthenticationPrincipal Jwt jwt, @PathVariable Long accountId) {
         return new ResponseEntity<>(accountService.getAccountDetails(accountId), HttpStatus.OK);

@@ -103,6 +103,8 @@ public class TransactionalServiceImplementation implements TransactionalService 
         return new UpdatedBalanceResponseDto(from.getStanje(), to.getStanje());
     }
 
+
+    @Transactional
     @Override
     public void transfer(Account sender, Account recipient, BankPaymentDto paymentDto) {
         debit(sender, paymentDto.getAmount());
@@ -122,6 +124,9 @@ public class TransactionalServiceImplementation implements TransactionalService 
     public UpdatedBalanceResponseDto depositOneSided(Account account, BigDecimal amount) {
         credit(account, amount);
         return new UpdatedBalanceResponseDto(account.getStanje(), account.getStanje());
+    public void creditTransactional(Account account, BigDecimal amount)
+    {
+        credit(account,amount);
     }
 
 

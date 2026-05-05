@@ -54,4 +54,7 @@ public interface TransactionalService {
      * @return azurirano stanje istog racuna posle operacije
      */
     UpdatedBalanceResponseDto depositOneSided(Account account, BigDecimal amount);
+    void creditTransactional(Account account, BigDecimal amount);
+
+
 }

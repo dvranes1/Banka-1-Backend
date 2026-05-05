@@ -7,11 +7,14 @@ import com.banka1.account_service.domain.enums.AccountConcrete;
 import com.banka1.account_service.domain.enums.AccountOwnershipType;
 import com.banka1.account_service.domain.enums.CurrencyCode;
 import com.banka1.account_service.domain.enums.Status;
+import com.banka1.account_service.dto.request.CreditAccountDto;
+import com.banka1.account_service.dto.request.CreditBankDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 import com.banka1.account_service.dto.response.InfoResponseDto;
 import com.banka1.account_service.dto.response.InternalAccountDetailsDto;
 import com.banka1.account_service.dto.response.UpdatedBalanceResponseDto;
 import com.banka1.account_service.repository.AccountRepository;
+import com.banka1.account_service.repository.CurrencyRepository;
 import com.banka1.account_service.service.TransactionalService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +37,7 @@ class AccountServiceImplementationTest {
 
     @Mock private TransactionalService transactionalService;
     @Mock private AccountRepository accountRepository;
+    @Mock private CurrencyRepository currencyRepository;
 
     @InjectMocks
     private AccountServiceImplementation service;
@@ -209,6 +213,54 @@ class AccountServiceImplementationTest {
     }
 
     // ──────────────────── info ────────────────────
+
+    @Test
+    void creditAccountCreditsValidatedAccount() {
+        CheckingAccount account = checkingAccount("111000110000000011", 1L, RSD);
+        CreditAccountDto dto = new CreditAccountDto("111000110000000011", new BigDecimal("1500"));
+
+        when(accountRepository.findByBrojRacuna("111000110000000011")).thenReturn(Optional.of(account));
+
+        service.creditAccount(dto);
+
+        verify(transactionalService).creditTransactional(account, new BigDecimal("1500"));
+    }
+
+    @Test
+    void creditAccountThrowsWhenAccountNotFound() {
+        CreditAccountDto dto = new CreditAccountDto("111000110000000011", new BigDecimal("1500"));
+        when(accountRepository.findByBrojRacuna("111000110000000011")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.creditAccount(dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("111000110000000011");
+
+        verifyNoInteractions(transactionalService);
+    }
+
+    @Test
+    void creditBankCreditsValidatedBankAccount() {
+        CheckingAccount bank = checkingAccount("111000110000000099", -1L, RSD);
+        CreditBankDto dto = new CreditBankDto("rsd", new BigDecimal("2500"));
+
+        when(currencyRepository.findByOznaka(CurrencyCode.RSD)).thenReturn(Optional.of(RSD));
+        when(accountRepository.findByVlasnikAndCurrency(-1L, RSD)).thenReturn(Optional.of(bank));
+
+        service.creditBank(dto);
+
+        verify(transactionalService).creditTransactional(bank, new BigDecimal("2500"));
+    }
+
+    @Test
+    void creditBankThrowsWhenCurrencyCodeInvalid() {
+        CreditBankDto dto = new CreditBankDto("bad", new BigDecimal("2500"));
+
+        assertThatThrownBy(() -> service.creditBank(dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("bad");
+
+        verifyNoInteractions(currencyRepository, transactionalService);
+    }
 
     @Test
     void infoReturnsCorrectCurrenciesForSameCurrency() {

@@ -2,6 +2,8 @@ package com.banka1.account_service.service;
 
 import com.banka1.account_service.dto.request.BankPaymentDto;
 import com.banka1.account_service.dto.request.OneSidedTransactionDto;
+import com.banka1.account_service.dto.request.CreditAccountDto;
+import com.banka1.account_service.dto.request.CreditBankDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 
 import com.banka1.account_service.domain.enums.CurrencyCode;
@@ -16,6 +18,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
  */
 public interface AccountService {
 
+
+    void creditBank(CreditBankDto creditBankDto);
+
+    void creditAccount(CreditAccountDto creditAccountDto);
+
     /**
      * Izvrsava transakciju izmedju racuna razlicitih vlasnika.
      * Validira oba racuna i banka-racune za svaku valutu, zatim prenosi sredstva.
@@ -23,6 +30,10 @@ public interface AccountService {
      * @param paymentDto podaci o placanju (brojevi racuna, iznosi, provizija, ID klijenta)
      * @return azurirana stanja oba racuna nakon transakcije
      */
+
+
+
+
     UpdatedBalanceResponseDto transaction(PaymentDto paymentDto);
 
 
