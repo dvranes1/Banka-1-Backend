@@ -4,6 +4,8 @@ import com.banka1.account_service.dto.request.BankPaymentDto;
 import com.banka1.account_service.dto.request.OneSidedTransactionDto;
 import com.banka1.account_service.dto.request.CreditAccountDto;
 import com.banka1.account_service.dto.request.CreditBankDto;
+import com.banka1.account_service.dto.request.CreditDebitAccountDto;
+import com.banka1.account_service.dto.request.CreditDebitBankDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 
 import com.banka1.account_service.domain.enums.CurrencyCode;
@@ -19,9 +21,14 @@ import org.springframework.security.oauth2.jwt.Jwt;
 public interface AccountService {
 
 
-    void creditBank(CreditBankDto creditBankDto);
+    void creditBank(CreditDebitBankDto creditDebitBankDto);
 
-    void creditAccount(CreditAccountDto creditAccountDto);
+    void creditAccount(CreditDebitAccountDto creditDebitAccountDto);
+
+    void debitBank(CreditDebitBankDto creditDebitBankDto);
+
+    void debitAccount(CreditDebitAccountDto creditDebitAccountDto);
+
 
     /**
      * Izvrsava transakciju izmedju racuna razlicitih vlasnika.

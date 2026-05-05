@@ -2,6 +2,8 @@ package com.banka1.account_service.controller;
 
 import com.banka1.account_service.domain.enums.CurrencyCode;
 import com.banka1.account_service.dto.request.OneSidedTransactionDto;
+import com.banka1.account_service.dto.request.CreditDebitAccountDto;
+import com.banka1.account_service.dto.request.CreditDebitBankDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 import com.banka1.account_service.dto.response.InfoResponseDto;
 import com.banka1.account_service.dto.response.InternalAccountDetailsDto;
@@ -55,6 +57,58 @@ class AccountControllerUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(expected);
         verify(accountService).transfer(dto);
+    }
+
+    @Test
+    void creditReturnsOkAndDelegates() {
+        AccountController controller = new AccountController(accountService);
+        CreditDebitAccountDto dto = new CreditDebitAccountDto(
+                "1110001000000000115",
+                new BigDecimal("1500"),
+                1L
+        );
+
+        ResponseEntity<Void> response = controller.credit(null, dto);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(accountService).creditAccount(dto);
+    }
+
+    @Test
+    void creditBankReturnsOkAndDelegates() {
+        AccountController controller = new AccountController(accountService);
+        CreditDebitBankDto dto = new CreditDebitBankDto("rsd", new BigDecimal("1500"));
+
+        ResponseEntity<Void> response = controller.creditBank(null, dto);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(accountService).creditBank(dto);
+    }
+
+    @Test
+    void debitReturnsOkAndDelegates() {
+        AccountController controller = new AccountController(accountService);
+        CreditDebitAccountDto dto = new CreditDebitAccountDto(
+                "1110001000000000115",
+                new BigDecimal("1500"),
+                1L
+        );
+
+        ResponseEntity<Void> response = controller.debit(null, dto);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(accountService).debitAccount(dto);
+    }
+
+    @Test
+    void debitBankReturnsOkAndDelegates() {
+        AccountController controller = new AccountController(accountService);
+        CreditDebitBankDto dto = new CreditDebitBankDto("rsd", new BigDecimal("1500"));
+
+        ResponseEntity<Void> response = controller.debitBank(null, dto);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(accountService).debitBank(dto);
     }
 
     @Test

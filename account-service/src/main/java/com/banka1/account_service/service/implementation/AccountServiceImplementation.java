@@ -6,6 +6,8 @@ import com.banka1.account_service.domain.enums.CurrencyCode;
 import com.banka1.account_service.domain.enums.Status;
 import com.banka1.account_service.dto.request.BankPaymentDto;
 import com.banka1.account_service.dto.request.OneSidedTransactionDto;
+import com.banka1.account_service.dto.request.CreditDebitAccountDto;
+import com.banka1.account_service.dto.request.CreditDebitBankDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 import com.banka1.account_service.dto.response.InfoResponseDto;
 import com.banka1.account_service.dto.response.InternalAccountDetailsDto;
@@ -16,12 +18,10 @@ import com.banka1.account_service.service.AccountService;
 import com.banka1.account_service.service.TransactionalService;
 import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.NoSuchElementException;
 
@@ -125,20 +125,20 @@ public class AccountServiceImplementation implements AccountService {
     }
 
     @Override
-    public void creditBank(CreditBankDto creditBankDto) {
+    public void creditBank(CreditDebitBankDto creditDebitBankDto) {
         CurrencyCode currencyCode;
         try
         {
-            currencyCode=CurrencyCode.valueOf(creditBankDto.getCurrencyCode().toUpperCase());
+            currencyCode=CurrencyCode.valueOf(creditDebitBankDto.getCurrencyCode().toUpperCase());
         }
         catch (Exception e)
         {
-            throw new IllegalArgumentException("Ne postoji ovaj currencyCode: "+creditBankDto.getCurrencyCode());
+            throw new IllegalArgumentException("Ne postoji ovaj currencyCode: "+ creditDebitBankDto.getCurrencyCode());
         }
         Account account=validateBank(currencyCode);
         for(int i = 0; true; i++) {
             try {
-                transactionalService.creditTransactional(account,creditBankDto.getAmount());
+                transactionalService.creditTransactional(account, creditDebitBankDto.getAmount());
                 return;
             } catch (ObjectOptimisticLockingFailureException | OptimisticLockException optimisticLockException) {
                 if(i>=2)
@@ -148,11 +148,52 @@ public class AccountServiceImplementation implements AccountService {
     }
 
     @Override
-    public void creditAccount(CreditAccountDto creditAccountDto) {
-        Account account=validate(creditAccountDto.getAccountNumber());
+    public void creditAccount(CreditDebitAccountDto creditDebitAccountDto) {
+        Account account=validate(creditDebitAccountDto.getAccountNumber());
+        if(!account.getVlasnik().equals(-1L) && !account.getVlasnik().equals(creditDebitAccountDto.getClientId()))
+            throw new IllegalArgumentException("Nisi vlasnik racuna");
         for(int i = 0; true; i++) {
             try {
-                transactionalService.creditTransactional(account,creditAccountDto.getAmount());
+                transactionalService.creditTransactional(account, creditDebitAccountDto.getAmount());
+                return;
+            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException optimisticLockException) {
+                if(i>=2)
+                    throw optimisticLockException;
+            }
+        }
+    }
+
+    @Override
+    public void debitBank(CreditDebitBankDto creditDebitBankDto) {
+        CurrencyCode currencyCode;
+        try
+        {
+            currencyCode=CurrencyCode.valueOf(creditDebitBankDto.getCurrencyCode().toUpperCase());
+        }
+        catch (Exception e)
+        {
+            throw new IllegalArgumentException("Ne postoji ovaj currencyCode: "+ creditDebitBankDto.getCurrencyCode());
+        }
+        Account account=validateBank(currencyCode);
+        for(int i = 0; true; i++) {
+            try {
+                transactionalService.debitTransactional(account, creditDebitBankDto.getAmount());
+                return;
+            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException optimisticLockException) {
+                if(i>=2)
+                    throw optimisticLockException;
+            }
+        }
+    }
+
+    @Override
+    public void debitAccount(CreditDebitAccountDto creditDebitAccountDto) {
+        Account account=validate(creditDebitAccountDto.getAccountNumber());
+        if(!account.getVlasnik().equals(-1L) && !account.getVlasnik().equals(creditDebitAccountDto.getClientId()))
+            throw new IllegalArgumentException("Nisi vlasnik racuna");
+        for(int i = 0; true; i++) {
+            try {
+                transactionalService.debitTransactional(account, creditDebitAccountDto.getAmount());
                 return;
             } catch (ObjectOptimisticLockingFailureException | OptimisticLockException optimisticLockException) {
                 if(i>=2)

@@ -3,6 +3,8 @@ package com.banka1.account_service.controller;
 import com.banka1.account_service.domain.enums.CurrencyCode;
 import com.banka1.account_service.dto.request.BankPaymentDto;
 import com.banka1.account_service.dto.request.OneSidedTransactionDto;
+import com.banka1.account_service.dto.request.CreditDebitAccountDto;
+import com.banka1.account_service.dto.request.CreditDebitBankDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 import com.banka1.account_service.dto.response.InfoResponseDto;
 import com.banka1.account_service.dto.response.InternalAccountDetailsDto;
@@ -65,16 +67,30 @@ public class AccountController {
     }
 
     @PostMapping("/credit")
-    public ResponseEntity<Void> credit(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid CreditAccountDto creditAccountDto)
+    public ResponseEntity<Void> credit(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid CreditDebitAccountDto creditDebitAccountDto)
     {
-        accountService.creditAccount(creditAccountDto);
+        accountService.creditAccount(creditDebitAccountDto);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @PostMapping("/creditBank")
-    public ResponseEntity<Void> creditBank(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid CreditBankDto creditBankDto)
+    public ResponseEntity<Void> creditBank(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid CreditDebitBankDto creditDebitBankDto)
     {
-        accountService.creditBank(creditBankDto);
+        accountService.creditBank(creditDebitBankDto);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @PostMapping("/debit")
+    public ResponseEntity<Void> debit(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid CreditDebitAccountDto creditDebitAccountDto)
+    {
+        accountService.debitAccount(creditDebitAccountDto);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @PostMapping("/debitBank")
+    public ResponseEntity<Void> debitBank(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid CreditDebitBankDto creditDebitBankDto)
+    {
+        accountService.debitBank(creditDebitBankDto);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 

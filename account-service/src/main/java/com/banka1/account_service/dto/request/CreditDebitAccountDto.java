@@ -14,10 +14,12 @@ import java.math.BigDecimal;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreditAccountDto {
+public class CreditDebitAccountDto {
     @Pattern(regexp = "^\\d{19}$", message = "Broj racuna mora imati 19 cifara")
     private String accountNumber;
     @NotNull(message = "Unesi amount")
     @DecimalMin(value = "0.0", inclusive = false)
     private BigDecimal amount;
+    @NotNull(message = "Unesi id clienta")
+    private Long clientId;
 }

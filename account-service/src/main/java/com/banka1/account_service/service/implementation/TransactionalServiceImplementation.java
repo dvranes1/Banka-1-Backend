@@ -130,5 +130,11 @@ public class TransactionalServiceImplementation implements TransactionalService 
         credit(account,amount);
     }
 
+    @Transactional
+    @Override
+    public void debitTransactional(Account account, BigDecimal amount) {
+      debit(account,amount);
+    }
+
 
 }

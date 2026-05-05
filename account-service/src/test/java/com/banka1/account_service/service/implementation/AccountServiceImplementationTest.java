@@ -7,8 +7,8 @@ import com.banka1.account_service.domain.enums.AccountConcrete;
 import com.banka1.account_service.domain.enums.AccountOwnershipType;
 import com.banka1.account_service.domain.enums.CurrencyCode;
 import com.banka1.account_service.domain.enums.Status;
-import com.banka1.account_service.dto.request.CreditAccountDto;
-import com.banka1.account_service.dto.request.CreditBankDto;
+import com.banka1.account_service.dto.request.CreditDebitAccountDto;
+import com.banka1.account_service.dto.request.CreditDebitBankDto;
 import com.banka1.account_service.dto.request.PaymentDto;
 import com.banka1.account_service.dto.response.InfoResponseDto;
 import com.banka1.account_service.dto.response.InternalAccountDetailsDto;
@@ -21,7 +21,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -217,7 +216,7 @@ class AccountServiceImplementationTest {
     @Test
     void creditAccountCreditsValidatedAccount() {
         CheckingAccount account = checkingAccount("111000110000000011", 1L, RSD);
-        CreditAccountDto dto = new CreditAccountDto("111000110000000011", new BigDecimal("1500"));
+        CreditDebitAccountDto dto = new CreditDebitAccountDto("111000110000000011", new BigDecimal("1500"), 1L);
 
         when(accountRepository.findByBrojRacuna("111000110000000011")).thenReturn(Optional.of(account));
 
@@ -228,7 +227,7 @@ class AccountServiceImplementationTest {
 
     @Test
     void creditAccountThrowsWhenAccountNotFound() {
-        CreditAccountDto dto = new CreditAccountDto("111000110000000011", new BigDecimal("1500"));
+        CreditDebitAccountDto dto = new CreditDebitAccountDto("111000110000000011", new BigDecimal("1500"), 1L);
         when(accountRepository.findByBrojRacuna("111000110000000011")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.creditAccount(dto))
@@ -239,9 +238,35 @@ class AccountServiceImplementationTest {
     }
 
     @Test
+    void creditAccountThrowsWhenNotAccountOwner() {
+        CheckingAccount account = checkingAccount("111000110000000011", 1L, RSD);
+        CreditDebitAccountDto dto = new CreditDebitAccountDto("111000110000000011", new BigDecimal("1500"), 99L);
+
+        when(accountRepository.findByBrojRacuna("111000110000000011")).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.creditAccount(dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Nisi vlasnik racuna");
+
+        verifyNoInteractions(transactionalService);
+    }
+
+    @Test
+    void creditAccountAllowsBankOwnedAccountWithoutClientOwnerMatch() {
+        CheckingAccount account = checkingAccount("111000110000000099", -1L, RSD);
+        CreditDebitAccountDto dto = new CreditDebitAccountDto("111000110000000099", new BigDecimal("1500"), 99L);
+
+        when(accountRepository.findByBrojRacuna("111000110000000099")).thenReturn(Optional.of(account));
+
+        service.creditAccount(dto);
+
+        verify(transactionalService).creditTransactional(account, new BigDecimal("1500"));
+    }
+
+    @Test
     void creditBankCreditsValidatedBankAccount() {
         CheckingAccount bank = checkingAccount("111000110000000099", -1L, RSD);
-        CreditBankDto dto = new CreditBankDto("rsd", new BigDecimal("2500"));
+        CreditDebitBankDto dto = new CreditDebitBankDto("rsd", new BigDecimal("2500"));
 
         when(currencyRepository.findByOznaka(CurrencyCode.RSD)).thenReturn(Optional.of(RSD));
         when(accountRepository.findByVlasnikAndCurrency(-1L, RSD)).thenReturn(Optional.of(bank));
@@ -253,9 +278,83 @@ class AccountServiceImplementationTest {
 
     @Test
     void creditBankThrowsWhenCurrencyCodeInvalid() {
-        CreditBankDto dto = new CreditBankDto("bad", new BigDecimal("2500"));
+        CreditDebitBankDto dto = new CreditDebitBankDto("bad", new BigDecimal("2500"));
 
         assertThatThrownBy(() -> service.creditBank(dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("bad");
+
+        verifyNoInteractions(currencyRepository, transactionalService);
+    }
+
+    @Test
+    void debitAccountDebitsValidatedAccount() {
+        CheckingAccount account = checkingAccount("111000110000000011", 1L, RSD);
+        CreditDebitAccountDto dto = new CreditDebitAccountDto("111000110000000011", new BigDecimal("1500"), 1L);
+
+        when(accountRepository.findByBrojRacuna("111000110000000011")).thenReturn(Optional.of(account));
+
+        service.debitAccount(dto);
+
+        verify(transactionalService).debitTransactional(account, new BigDecimal("1500"));
+    }
+
+    @Test
+    void debitAccountThrowsWhenAccountNotFound() {
+        CreditDebitAccountDto dto = new CreditDebitAccountDto("111000110000000011", new BigDecimal("1500"), 1L);
+        when(accountRepository.findByBrojRacuna("111000110000000011")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.debitAccount(dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("111000110000000011");
+
+        verifyNoInteractions(transactionalService);
+    }
+
+    @Test
+    void debitAccountThrowsWhenNotAccountOwner() {
+        CheckingAccount account = checkingAccount("111000110000000011", 1L, RSD);
+        CreditDebitAccountDto dto = new CreditDebitAccountDto("111000110000000011", new BigDecimal("1500"), 99L);
+
+        when(accountRepository.findByBrojRacuna("111000110000000011")).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.debitAccount(dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Nisi vlasnik racuna");
+
+        verifyNoInteractions(transactionalService);
+    }
+
+    @Test
+    void debitAccountAllowsBankOwnedAccountWithoutClientOwnerMatch() {
+        CheckingAccount account = checkingAccount("111000110000000099", -1L, RSD);
+        CreditDebitAccountDto dto = new CreditDebitAccountDto("111000110000000099", new BigDecimal("1500"), 99L);
+
+        when(accountRepository.findByBrojRacuna("111000110000000099")).thenReturn(Optional.of(account));
+
+        service.debitAccount(dto);
+
+        verify(transactionalService).debitTransactional(account, new BigDecimal("1500"));
+    }
+
+    @Test
+    void debitBankDebitsValidatedBankAccount() {
+        CheckingAccount bank = checkingAccount("111000110000000099", -1L, RSD);
+        CreditDebitBankDto dto = new CreditDebitBankDto("rsd", new BigDecimal("2500"));
+
+        when(currencyRepository.findByOznaka(CurrencyCode.RSD)).thenReturn(Optional.of(RSD));
+        when(accountRepository.findByVlasnikAndCurrency(-1L, RSD)).thenReturn(Optional.of(bank));
+
+        service.debitBank(dto);
+
+        verify(transactionalService).debitTransactional(bank, new BigDecimal("2500"));
+    }
+
+    @Test
+    void debitBankThrowsWhenCurrencyCodeInvalid() {
+        CreditDebitBankDto dto = new CreditDebitBankDto("bad", new BigDecimal("2500"));
+
+        assertThatThrownBy(() -> service.debitBank(dto))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("bad");
 

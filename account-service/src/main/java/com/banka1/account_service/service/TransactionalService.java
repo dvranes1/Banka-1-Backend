@@ -57,4 +57,7 @@ public interface TransactionalService {
     void creditTransactional(Account account, BigDecimal amount);
 
 
+    void debitTransactional(Account account, BigDecimal amount);
+
+
 }
