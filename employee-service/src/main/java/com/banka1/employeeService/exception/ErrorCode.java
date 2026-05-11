@@ -28,6 +28,12 @@ public enum ErrorCode {
     /** Pokusaj kreiranja zaposlenog koji nije punoletan (mladji od 18 godina). */
     USER_TOO_YOUNG(HttpStatus.BAD_REQUEST, "ERR_USER_005", "Korisnik mora biti punoletan"),
 
+    /** Administrator ne sme sebi da ukloni permisiju za upravljanje fondovima. */
+    CANNOT_REMOVE_OWN_FUND_AGENT_PERMISSION(
+            HttpStatus.BAD_REQUEST,
+            "ERR_USER_006",
+            "Ne mozes sebi ukloniti permisiju za upravljanje fondovima"),
+
     // ── Autentifikacione greske (ERR_AUTH_xxx) ────────────────────────────────
 
     /** Neispravni kredencijali pri prijavi (pogresan email ili lozinka). */

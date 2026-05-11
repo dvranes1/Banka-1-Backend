@@ -2,6 +2,7 @@ package com.banka1.employeeService.integration;
 
 import com.banka1.employeeService.domain.ConfirmationToken;
 import com.banka1.employeeService.domain.Zaposlen;
+import com.banka1.employeeService.client.InvestmentFundClient;
 import com.banka1.employeeService.domain.enums.Pol;
 import com.banka1.employeeService.domain.enums.Role;
 import com.banka1.employeeService.dto.requests.EmployeeCreateRequestDto;
@@ -50,6 +51,9 @@ class CrudEndpointsIntegrationTest {
 
     @MockitoBean
     private RabbitClient rabbitClient;
+
+    @MockitoBean
+    private InvestmentFundClient investmentFundClient;
 
     @BeforeEach
     void setUp() {

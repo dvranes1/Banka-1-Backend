@@ -2,6 +2,7 @@ package com.banka1.employeeService.service.implementation;
 
 import com.banka1.employeeService.domain.ConfirmationToken;
 import com.banka1.employeeService.domain.Zaposlen;
+import com.banka1.employeeService.client.InvestmentFundClient;
 import com.banka1.employeeService.domain.enums.Permission;
 import com.banka1.employeeService.domain.enums.Role;
 import com.banka1.employeeService.dto.rabbitmq.EmailDto;
@@ -68,6 +69,11 @@ public class CrudServiceImplementation implements CrudService {
      * Mapper za konverziju izmedju DTO i JPA entiteta zaposlenog.
      */
     private final EmployeeMapper employeeMapper;
+
+    /**
+     * Klijent za prebacivanje upravljanja fondovima kada supervisor izgubi dozvolu.
+     */
+    private final InvestmentFundClient investmentFundClient;
 
     /**
      * Naziv JWT claim-a koji nosi naziv uloge korisnika.
@@ -175,14 +181,42 @@ public class CrudServiceImplementation implements CrudService {
         Zaposlen zaposlen = zaposlenRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "ID: " + id));
 
+        Long adminId = extractAuthenticatedUserId(jwt);
         Role role1 = Role.valueOf((String) jwt.getClaims().get(role));
+        List<String> list = jwt.getClaim(permission);
+        Set<Permission> permissions = list == null
+                ? new HashSet<>()
+                : new HashSet<>(list.stream().map(Permission::valueOf).toList());
+        validateFundAgentSelfRemoval(zaposlen, dto, role1, permissions, adminId);
+
         if (role1.getPower() <= zaposlen.getRole().getPower())
             throw new BusinessException(ErrorCode.NOT_STRONG_ROLE, "Slab si");
 
-        List<String> list=jwt.getClaim(permission);
-        Set<Permission> permissions=new HashSet<>(list.stream().map(Permission::valueOf).toList());
-        employeeMapper.updateEntityFromDto(zaposlen, dto, role1,permissions);
+        Set<Permission> previousPermissions = new HashSet<>(zaposlen.getPermissionSet());
+        employeeMapper.updateEntityFromDto(zaposlen, dto, role1, permissions);
+
+        Set<Permission> newPermissions = new HashSet<>(zaposlen.getPermissionSet());
+        // In this backend, FUND_AGENT_MANAGE is the concrete permission behind the
+        // "isSupervisor"/fund-manager capability referenced by the issue.
+        boolean removedFundAgentPermission = previousPermissions.contains(Permission.FUND_AGENT_MANAGE)
+                && !newPermissions.contains(Permission.FUND_AGENT_MANAGE);
+
+        if (removedFundAgentPermission && adminId.equals(id))
+            throw new BusinessException(
+                    ErrorCode.CANNOT_REMOVE_OWN_FUND_AGENT_PERMISSION,
+                    "Employee ID: " + id);
+
         Zaposlen updated = zaposlenRepository.save(zaposlen);
+
+        if (removedFundAgentPermission) {
+            String bearerToken = jwt.getTokenValue();
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    investmentFundClient.transferManagement(id, adminId, bearerToken);
+                }
+            });
+        }
 
         Boolean aktivan = dto.getAktivan();
         if (aktivan != null && !aktivan) {
@@ -291,5 +325,51 @@ public class CrudServiceImplementation implements CrudService {
      */
     private String escapeLike(String s) {
         return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    private Long extractAuthenticatedUserId(Jwt jwt) {
+        Object idClaim = jwt.getClaim("id");
+        if (idClaim == null) throw new BusinessException(ErrorCode.INVALID_TOKEN, "JWT ne sadrži id claim");
+        return ((Number) idClaim).longValue();
+    }
+
+    private void validateFundAgentSelfRemoval(
+            Zaposlen zaposlen,
+            EmployeeUpdateRequestDto dto,
+            Role adminRole,
+            Set<Permission> adminPermissions,
+            Long adminId
+    ) {
+        if (!adminId.equals(zaposlen.getId()) || !zaposlen.getPermissionSet().contains(Permission.FUND_AGENT_MANAGE)) {
+            return;
+        }
+
+        Zaposlen simulated = copyForPermissionValidation(zaposlen);
+        employeeMapper.updateEntityFromDto(simulated, dto, adminRole, adminPermissions);
+        if (!simulated.getPermissionSet().contains(Permission.FUND_AGENT_MANAGE)) {
+            throw new BusinessException(
+                    ErrorCode.CANNOT_REMOVE_OWN_FUND_AGENT_PERMISSION,
+                    "Employee ID: " + zaposlen.getId());
+        }
+    }
+
+    private Zaposlen copyForPermissionValidation(Zaposlen source) {
+        Zaposlen target = new Zaposlen();
+        target.setId(source.getId());
+        target.setIme(source.getIme());
+        target.setPrezime(source.getPrezime());
+        target.setDatumRodjenja(source.getDatumRodjenja());
+        target.setPol(source.getPol());
+        target.setEmail(source.getEmail());
+        target.setBrojTelefona(source.getBrojTelefona());
+        target.setAdresa(source.getAdresa());
+        target.setUsername(source.getUsername());
+        target.setPassword(source.getPassword());
+        target.setPozicija(source.getPozicija());
+        target.setDepartman(source.getDepartman());
+        target.setAktivan(source.isAktivan());
+        target.setRole(source.getRole());
+        target.setPermissionSet(new HashSet<>(source.getPermissionSet()));
+        return target;
     }
 }

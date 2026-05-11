@@ -2,6 +2,8 @@ package com.banka1.employeeService.service.implementation;
 
 import com.banka1.employeeService.domain.ConfirmationToken;
 import com.banka1.employeeService.domain.Zaposlen;
+import com.banka1.employeeService.client.InvestmentFundClient;
+import com.banka1.employeeService.domain.enums.Permission;
 import com.banka1.employeeService.domain.enums.Pol;
 import com.banka1.employeeService.domain.enums.Role;
 import com.banka1.employeeService.dto.requests.EmployeeCreateRequestDto;
@@ -21,12 +23,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
@@ -34,6 +38,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,6 +66,9 @@ class CrudServiceImplementationTest {
 
     @Mock
     private EmployeeMapper employeeMapper;
+
+    @Mock
+    private InvestmentFundClient investmentFundClient;
 
     @InjectMocks
     private CrudServiceImplementation crudService;
@@ -174,7 +182,7 @@ class CrudServiceImplementationTest {
     void updateEmployeeThrowsWhenCallerRoleIsNotStrongEnough() {
         Zaposlen emp = employee("ana@banka.com", "ana", Role.AGENT);
         EmployeeUpdateRequestDto request = new EmployeeUpdateRequestDto();
-        Jwt jwt = jwtWithClaims(Map.of("roles", "AGENT"));
+        Jwt jwt = jwtWithClaims(Map.of("roles", "AGENT", "id", 5L));
 
         when(zaposlenRepository.findById(1L)).thenReturn(Optional.of(emp));
 
@@ -186,7 +194,7 @@ class CrudServiceImplementationTest {
     @Test
     void updateEmployeeThrowsWhenEmployeeNotFound() {
         EmployeeUpdateRequestDto request = new EmployeeUpdateRequestDto();
-        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN"));
+        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "id", 5L));
 
         when(zaposlenRepository.findById(99L)).thenReturn(Optional.empty());
 
@@ -202,7 +210,7 @@ class CrudServiceImplementationTest {
         EmployeeUpdateRequestDto request = new EmployeeUpdateRequestDto();
         request.setDepartman("IT");
         EmployeeResponseDto responseDto = new EmployeeResponseDto(1L, "Ana", "Anic", "ana@banka.com", "ana", "Broker", "IT", true, Role.BASIC);
-        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of()));
+        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of(), "id", 500L));
 
         when(zaposlenRepository.findById(1L)).thenReturn(Optional.of(emp));
         when(zaposlenRepository.save(emp)).thenReturn(emp);
@@ -219,7 +227,7 @@ class CrudServiceImplementationTest {
         EmployeeUpdateRequestDto request = new EmployeeUpdateRequestDto();
         request.setAktivan(false);
         EmployeeResponseDto responseDto = new EmployeeResponseDto(1L, "Ana", "Anic", "ana@banka.com", "ana", "Agent", "Prodaja", false, Role.BASIC);
-        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of()));
+        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of(), "id", 500L));
 
         when(zaposlenRepository.findById(1L)).thenReturn(Optional.of(emp));
         when(zaposlenRepository.save(emp)).thenReturn(emp);
@@ -317,7 +325,7 @@ class CrudServiceImplementationTest {
         EmployeeUpdateRequestDto request = new EmployeeUpdateRequestDto();
         request.setDepartman("HR");
         EmployeeResponseDto responseDto = new EmployeeResponseDto(1L, "Ana", "Anic", "ana@banka.com", "ana", "Broker", "HR", true, Role.BASIC);
-        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of()));
+        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of(), "id", 500L));
 
         when(zaposlenRepository.findById(1L)).thenReturn(Optional.of(emp));
         when(zaposlenRepository.save(emp)).thenReturn(emp);
@@ -334,7 +342,7 @@ class CrudServiceImplementationTest {
         EmployeeUpdateRequestDto request = new EmployeeUpdateRequestDto();
         request.setAktivan(true);
         EmployeeResponseDto responseDto = new EmployeeResponseDto(1L, "Ana", "Anic", "ana@banka.com", "ana", "Broker", "Prodaja", true, Role.BASIC);
-        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of()));
+        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of(), "id", 500L));
 
         when(zaposlenRepository.findById(1L)).thenReturn(Optional.of(emp));
         when(zaposlenRepository.save(emp)).thenReturn(emp);
@@ -404,6 +412,76 @@ class CrudServiceImplementationTest {
         verify(rabbitClient, never()).sendEmailNotification(any());
     }
 
+    @Test
+    void updateEmployeeCallsInvestmentFundClientWhenSupervisorFundAgentPermissionIsRemoved() {
+        Zaposlen emp = employee("supervisor@banka.com", "supervisor", Role.SUPERVISOR);
+        emp.setPermissionSet(new java.util.HashSet<>(Set.of(Permission.FUND_AGENT_MANAGE, Permission.OTC_TRADE)));
+        EmployeeUpdateRequestDto request = new EmployeeUpdateRequestDto();
+        request.setRole(Role.AGENT);
+        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of(), "id", 500L));
+
+        when(zaposlenRepository.findById(1L)).thenReturn(Optional.of(emp));
+        when(zaposlenRepository.save(emp)).thenReturn(emp);
+        when(employeeMapper.toDto(emp)).thenReturn(new EmployeeResponseDto(
+                1L, "Ana", "Anic", "supervisor@banka.com", "supervisor", "Broker", "Prodaja", true, Role.AGENT));
+        Mockito.doAnswer(invocation -> {
+            Zaposlen target = invocation.getArgument(0);
+            target.setRole(Role.AGENT);
+            target.setPermissionSet(new java.util.HashSet<>(Set.of(Permission.SECURITIES_TRADE_LIMITED)));
+            return null;
+        }).when(employeeMapper).updateEntityFromDto(eq(emp), eq(request), eq(Role.ADMIN), any());
+
+        crudService.updateEmployee(jwt, 1L, request);
+
+        assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
+        verify(investmentFundClient, never()).transferManagement(any(), any(), any());
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+        verify(investmentFundClient).transferManagement(1L, 500L, "token");
+    }
+
+    @Test
+    void updateEmployeeDoesNotCallInvestmentFundClientWhenSupervisorFundAgentPermissionIsNotRemoved() {
+        Zaposlen emp = employee("agent@banka.com", "agent", Role.AGENT);
+        emp.setPermissionSet(new java.util.HashSet<>(Set.of(Permission.SECURITIES_TRADE_LIMITED)));
+        EmployeeUpdateRequestDto request = new EmployeeUpdateRequestDto();
+        request.setDepartman("Risk");
+        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of(), "id", 500L));
+
+        when(zaposlenRepository.findById(1L)).thenReturn(Optional.of(emp));
+        when(zaposlenRepository.save(emp)).thenReturn(emp);
+        when(employeeMapper.toDto(emp)).thenReturn(new EmployeeResponseDto(
+                1L, "Ana", "Anic", "agent@banka.com", "agent", "Broker", "Risk", true, Role.AGENT));
+
+        crudService.updateEmployee(jwt, 1L, request);
+
+        verify(investmentFundClient, never()).transferManagement(any(), any(), any());
+    }
+
+    @Test
+    void updateEmployeeThrowsWhenAdminRemovesOwnSupervisorFundAgentPermission() {
+        Zaposlen emp = employee("admin@banka.com", "admin", Role.ADMIN);
+        emp.setPermissionSet(new java.util.HashSet<>(Set.of(Permission.FUND_AGENT_MANAGE, Permission.OTC_TRADE)));
+        EmployeeUpdateRequestDto request = new EmployeeUpdateRequestDto();
+        request.setRole(Role.AGENT);
+        Jwt jwt = jwtWithClaims(Map.of("roles", "ADMIN", "permissions", List.of(), "id", 1L));
+
+        when(zaposlenRepository.findById(1L)).thenReturn(Optional.of(emp));
+        Mockito.doAnswer(invocation -> {
+            Zaposlen target = invocation.getArgument(0);
+            target.setRole(Role.AGENT);
+            target.setPermissionSet(new java.util.HashSet<>(Set.of(Permission.SECURITIES_TRADE_LIMITED)));
+            return null;
+        }).when(employeeMapper).updateEntityFromDto(any(Zaposlen.class), eq(request), eq(Role.ADMIN), any());
+
+        assertThatThrownBy(() -> crudService.updateEmployee(jwt, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CANNOT_REMOVE_OWN_FUND_AGENT_PERMISSION);
+
+        verify(zaposlenRepository, never()).save(any());
+        verify(investmentFundClient, never()).transferManagement(any(), any(), any());
+    }
+
     private EmployeeCreateRequestDto createRequest() {
         EmployeeCreateRequestDto request = new EmployeeCreateRequestDto();
         request.setIme("Nikola");
@@ -431,6 +509,7 @@ class CrudServiceImplementationTest {
         emp.setDepartman("Prodaja");
         emp.setAktivan(true);
         emp.setRole(role);
+        emp.setPermissionSet(new java.util.HashSet<>());
         return emp;
     }
 

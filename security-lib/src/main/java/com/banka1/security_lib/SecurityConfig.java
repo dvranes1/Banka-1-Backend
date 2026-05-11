@@ -3,7 +3,6 @@ package com.banka1.security_lib;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
@@ -55,9 +54,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    public static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+    public static MethodSecurityExpressionHandler methodSecurityExpressionHandler(
+            RoleHierarchy roleHierarchy,
+            SecurityProperties props) {
         DefaultMethodSecurityExpressionHandler handler =
-                new DefaultMethodSecurityExpressionHandler();
+                new PermissionMethodSecurityExpressionHandler(props);
         handler.setRoleHierarchy(roleHierarchy);
         return handler;
     }
